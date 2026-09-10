@@ -5,7 +5,7 @@
 
 ## Stack
 
-PHP 8.2 (Apache) + MySQL 8 + PhpSpreadsheet, Docker Compose (มีรูปแบบเดียวกับโปรเจกต์พี่น้อง `FinancialDashboardMukdahan`)
+PHP 8.2 (Apache) + PostgreSQL 16 + PhpSpreadsheet, Docker Compose
 
 ## เริ่มต้นใช้งาน
 
@@ -18,37 +18,31 @@ docker compose exec web php bin/create_admin.php admin "รหัสผ่าน
 
 เปิด http://localhost:8081/
 
-## Deploy ออนไลน์แบบไม่ต้องเปิดเครื่องตัวเองทิ้งไว้ (Railway)
+## Deploy ออนไลน์แบบไม่ต้องเปิดเครื่องตัวเองทิ้งไว้ (Render — free tier)
 
-[Railway](https://railway.app) รองรับ Docker + MySQL ตรงกับ stack นี้พอดี ไม่ต้อง rewrite โค้ด มี free trial ให้ทดลองก่อนจ่ายจริง
+[Render](https://render.com) มี Docker web service + PostgreSQL ฟรีทั้งคู่ ตรงกับ stack นี้พอดี (ย้ายจาก MySQL มา Postgres แล้วเพื่อรองรับ Render free tier — Railway หมด trial แล้วไม่ฟรีอีกต่อไป)
 
-1. Push โค้ดขึ้น GitHub ให้เสร็จก่อน (ดูหัวข้อ git push ใน CLAUDE session หรือใช้คำสั่งปกติ)
-2. ไป https://railway.app → New Project → **Deploy from GitHub repo** → เลือก `thering999/smiv_plus`
-   Railway จะเจอ `railway.json` ที่กำหนด Dockerfile ไว้ที่ `docker/php/Dockerfile` อัตโนมัติ
-3. ในโปรเจกต์เดียวกัน กด **+ New → Database → Add MySQL** (Railway จะสร้าง service MySQL แยกให้)
-4. ไปที่ service ของเว็บ (smiv_plus) → tab **Variables** → เพิ่ม:
-   ```
-   DB_HOST=${{MySQL.MYSQLHOST}}
-   DB_NAME=${{MySQL.MYSQLDATABASE}}
-   DB_USER=${{MySQL.MYSQLUSER}}
-   DB_PASS=${{MySQL.MYSQLPASSWORD}}
-   APP_BASE_PATH=
-   ```
-   (Railway จะ resolve ตัวแปรจาก service MySQL ให้อัตโนมัติ ไม่ต้อง copy ค่าเอง)
-5. Import schema: เปิด service MySQL → tab **Data/Query** → วางเนื้อหาไฟล์ `db/schema.sql` รันครั้งเดียว
-6. สร้าง admin คนแรก: ติดตั้ง [Railway CLI](https://docs.railway.app/guides/cli) แล้วรัน
+**ข้อจำกัด free tier**: web service จะ sleep เมื่อไม่มีคนเข้าใช้ ~15 นาที ปลุกใหม่ใช้เวลาสั้นๆ ตอนมีคนเข้าครั้งถัดไป — เหมาะกับงานที่ไม่ได้ใช้ตลอดเวลา
+
+1. Push โค้ดขึ้น GitHub ให้เสร็จก่อน
+2. ไป https://dashboard.render.com → **New → Blueprint** → เชื่อม repo `thering999/smiv_plus`
+   Render จะอ่าน `render.yaml` ที่ root แล้วสร้างทั้ง web service + Postgres database ให้อัตโนมัติ พร้อมเชื่อม env vars ให้เอง (ไม่ต้อง copy ค่าเอง)
+3. รอ build เสร็จ (Dockerfile ฝัง composer install ไว้แล้ว ไม่ต้องรันเพิ่ม)
+4. Import schema ครั้งแรก: เปิด Postgres service ในหน้า Render → **Connect → External Connection** copy คำสั่ง `psql` แล้วรันจากเครื่องตัวเอง:
    ```bash
-   railway login
-   railway link          # เลือกโปรเจกต์ smiv_plus
-   railway run php bin/create_admin.php admin "รหัสผ่านที่ปลอดภัย"
+   psql <connection string จาก Render> -f db/schema.sql
    ```
-7. Railway จะสร้างโดเมน `https://smiv-plus-xxxx.up.railway.app` ให้อัตโนมัติ (Settings → Networking → Generate Domain) พร้อม HTTPS ใช้งานได้ทันที ไม่ต้องเปิดเครื่องตัวเองทิ้งไว้เลย
+5. สร้าง admin คนแรก: เปิด web service → tab **Shell** (Render ให้ shell เข้า container ได้ฟรีจากหน้าเว็บ ไม่ต้องติดตั้ง CLI) รัน:
+   ```bash
+   php bin/create_admin.php admin "รหัสผ่านที่ปลอดภัย"
+   ```
+6. Render สร้างโดเมน `https://smiv-plus.onrender.com` ให้อัตโนมัติพร้อม HTTPS
 
-หมายเหตุ: ขั้นตอน login GitHub/Railway ต้องทำในเบราว์เซอร์ของคุณเอง (เป็น OAuth แบบ interactive) — Claude ทำแทนไม่ได้
+หมายเหตุ: ขั้นตอน login GitHub/Render ต้องทำในเบราว์เซอร์ของคุณเอง (เป็น OAuth แบบ interactive) — Claude ทำแทนไม่ได้
 
 ## เปิดออกอินเทอร์เน็ตแบบพึ่งเครื่องตัวเอง (Cloudflare Tunnel)
 
-Stack เป็น PHP+MySQL รันบน Cloudflare Pages/Workers ตรงๆ ไม่ได้ (Workers รองรับแค่ JS/TS, DB เป็น D1/SQLite) — ใช้ **Cloudflare Tunnel** แทน: เปิดเครื่อง/เซิร์ฟเวอร์ที่รัน Docker นี้ออกอินเทอร์เน็ตผ่าน Cloudflare โดยไม่ต้องเปิดพอร์ต ไม่ต้อง rewrite โค้ด
+Stack เป็น PHP+PostgreSQL รันบน Cloudflare Pages/Workers ตรงๆ ไม่ได้ (Workers รองรับแค่ JS/TS, DB เป็น D1/SQLite) — ใช้ **Cloudflare Tunnel** แทน: เปิดเครื่อง/เซิร์ฟเวอร์ที่รัน Docker นี้ออกอินเทอร์เน็ตผ่าน Cloudflare โดยไม่ต้องเปิดพอร์ต ไม่ต้อง rewrite โค้ด
 
 1. ไป https://one.dash.cloudflare.com/ → **Networks → Tunnels → Create a tunnel** → เลือก Cloudflared → ตั้งชื่อ
 2. หน้าถัดไปจะให้ **token** (สตริงยาว) — copy เก็บไว้ (**ห้ามแชร์ที่ไหนแบบเปิดเผย** เทียบเท่ารหัสผ่าน)
