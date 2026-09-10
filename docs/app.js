@@ -303,12 +303,20 @@ function countFindingsByCategory(analysisList) {
   return Object.fromEntries(Object.entries(counts).filter(([, v]) => v > 0));
 }
 
+// แนวโน้มข้ามปีงบ: จำนวนผู้ป่วยใหม่ (fiscal_year_be === FY) ต่อปีงบ จากข้อมูลทั้งหมดที่มี
+function buildYearlyTrend() {
+  const counts = {};
+  for (const p of state.patients) counts[p.fiscal_year_be] = (counts[p.fiscal_year_be] || 0) + 1;
+  const years = Object.keys(counts).map(Number).sort((a, b) => a - b);
+  return { years, newPatients: years.map(y => counts[y]) };
+}
+
 // ---------- export ----------
 window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M,
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend,
 };
 
 })();

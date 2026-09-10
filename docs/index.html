@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>SMI-V Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
@@ -20,7 +23,14 @@
   </div>
 </div>
 <header class="topbar">
-  <div class="brand">🧠 SMI-V Plus — ระบบรายงาน SMI-V เขตสุขภาพ (static, ไม่มี server)</div>
+  <div class="brand">
+    <svg class="logo-mark" width="34" height="34" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="24" cy="24" r="22" fill="#ffffff" fill-opacity=".15"/>
+      <path d="M24 8c-4 0-7 3-7 6.5 0 1.5.5 2.8 1.3 3.9C16.7 19.6 15 22.4 15 25.5 15 31.3 19.7 36 24 36s9-4.7 9-10.5c0-3.1-1.7-5.9-3.3-7.1.8-1.1 1.3-2.4 1.3-3.9C31 11 28 8 24 8z" fill="#fff"/>
+      <path d="M20 24l2.5 3L27 20" stroke="#2c6e91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <span>SMI-V Plus <small>ระบบรายงาน SMI-V เขตสุขภาพ · static, ไม่มี server</small></span>
+  </div>
   <nav class="nav">
     <button type="button" class="nav-btn active" id="navDashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button type="button" class="nav-btn" id="navReference" onclick="showTab('reference')">📖 คู่มือรหัส</button>
@@ -33,16 +43,30 @@
 <h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
 <p class="note">ระบบนี้ทำงานทั้งหมดใน browser (ไม่มี server/ฐานข้อมูล) — ข้อมูลที่นำเข้าจะถูกเก็บไว้ในเครื่องคุณ (localStorage) เท่านั้น จนกว่าจะกด "เผยแพร่" เพื่อสร้างไฟล์ data.json ให้ผู้ดูแลนำไป commit เข้า repo ให้ทุกคนเห็นร่วมกัน</p>
 
+<div id="unpublishedBanner" class="alert" hidden>⚠️ มีข้อมูลที่ยังไม่ได้เผยแพร่ — ถ้าปิดหน้านี้ไปคนอื่นจะยังไม่เห็นข้อมูลล่าสุด กด "เผยแพร่ข้อมูล" ด้านล่างแล้วนำไฟล์ไป commit เข้า repo</div>
+
 <div class="card">
   <h2 style="margin-top:0;border:none">นำเข้าข้อมูล Excel</h2>
   <p class="note">ไฟล์ .xlsx ชีตชื่อ <code>Data</code> หัวคอลัมน์: hoscode, hosname, pid, cid, name, lname, birth, sex, chw_addr, tambon, ampur, first_date_serv, date_serv, diagcode, b03x, follow_last</p>
   <input type="file" id="xlsxFile" accept=".xlsx">
   <div id="importStatus" class="status"></div>
+  <p id="storedFileInfo" class="note" hidden></p>
   <p style="margin-top:14px">
     <button class="btn" id="publishBtn">📤 เผยแพร่ข้อมูล (สร้าง data.json)</button>
     <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
+    <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
+    <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
+  <div id="publishHelper" class="card" hidden style="background:#e6f4ea;border-color:var(--success);margin-top:10px">
+    <strong>ขั้นตอนถัดไป — ทำให้ทุกคนเห็นข้อมูลนี้ (data.json ดาวน์โหลดแล้ว):</strong>
+    <ol style="margin:8px 0 0;padding-left:20px;line-height:1.8">
+      <li>ไป <a href="https://github.com/thering999/smiv_plus/upload/main/docs" target="_blank">github.com/thering999/smiv_plus/upload/main/docs</a></li>
+      <li>ลาก/เลือกไฟล์ <code>data.json</code> ที่เพิ่งดาวน์โหลด (มักอยู่ในโฟลเดอร์ Downloads) วางในหน้านั้น</li>
+      <li>เลื่อนลงล่าง กด <strong>Commit changes</strong></li>
+      <li>รอ ~1 นาที เว็บจะอัปเดตให้ทุกคนเห็นข้อมูลใหม่อัตโนมัติ</li>
+    </ol>
+  </div>
   <div id="popEditor" hidden style="margin-top:14px">
     <p class="note">H = ประชากร 15-60 ปี ของแต่ละอำเภอ (กรอกเอง) — I คำนวณอัตโนมัติจาก H × 4.37% × 11.92%</p>
     <table class="report-table" style="max-width:600px">
@@ -116,6 +140,7 @@
     <div class="chart-box"><h3>อัตราก่อความรุนแรงซ้ำรายพื้นที่</h3><canvas id="chartRepeatRate"></canvas></div>
     <div class="chart-box"><h3>สัดส่วนการติดตามรายพื้นที่</h3><canvas id="chartFollowByArea"></canvas></div>
     <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่รายเดือน</h3><canvas id="chartMonthlyTrend"></canvas></div>
+    <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่ข้ามปีงบ (ทุกข้อมูลที่มี)</h3><canvas id="chartYearlyTrend"></canvas></div>
     <div class="chart-box"><h3>สัดส่วนเพศ (ผู้ป่วยสะสมทั้งหมด)</h3><canvas id="chartSex"></canvas></div>
   </div>
 

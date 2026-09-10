@@ -3,9 +3,15 @@
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M } = window.smivEngine;
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
+let unpublishedChanges = false;
+function markDirty() {
+  unpublishedChanges = true;
+  const banner = document.getElementById('unpublishedBanner');
+  if (banner) banner.hidden = false;
+}
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 
@@ -45,6 +51,41 @@ function seedDefaultPopulationNames(fy) {
   }
 }
 
+// ---------- เก็บไฟล์ Excel ต้นฉบับล่าสุดไว้ในเครื่อง (อัปโหลดใหม่ = ทับของเดิม) ----------
+const RAW_FILE_KEY = 'smivplus_last_xlsx';
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+async function saveRawFile(file) {
+  try {
+    const dataUrl = await fileToBase64(file);
+    localStorage.setItem(RAW_FILE_KEY, JSON.stringify({ name: file.name, size: file.size, uploadedAt: new Date().toISOString(), dataUrl }));
+    renderStoredFileInfo();
+  } catch (e) { /* ไฟล์ใหญ่เกิน localStorage ไหว — ไม่เป็นไร ข้อมูลที่ parse แล้วยังอยู่ */ }
+}
+function renderStoredFileInfo() {
+  const el = document.getElementById('storedFileInfo');
+  if (!el) return;
+  try {
+    const raw = localStorage.getItem(RAW_FILE_KEY);
+    if (!raw) { el.hidden = true; return; }
+    const meta = JSON.parse(raw);
+    el.hidden = false;
+    el.innerHTML = `📁 ไฟล์ที่เก็บไว้ในเครื่องนี้: <strong>${escapeHtml(meta.name)}</strong> (${(meta.size / 1024).toFixed(0)} KB) · อัปโหลดเมื่อ ${new Date(meta.uploadedAt).toLocaleString('th-TH')} — <a href="#" id="downloadStoredFile">ดาวน์โหลดไฟล์นี้กลับ</a>`;
+    document.getElementById('downloadStoredFile').addEventListener('click', e => {
+      e.preventDefault();
+      const a = document.createElement('a');
+      a.href = meta.dataUrl; a.download = meta.name;
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  } catch (e) { el.hidden = true; }
+}
+
 // ---------- Upload ----------
 async function handleUpload(file) {
   setStatus('กำลังอ่านไฟล์...', '');
@@ -57,6 +98,8 @@ async function handleUpload(file) {
     state.patients = Array.from(map.values());
     seedDefaultPopulationNames(currentFy());
     saveLocal();
+    saveRawFile(file);
+    markDirty();
     setStatus(`นำเข้าสำเร็จ ${patients.length} แถว (รวมทั้งหมด ${state.patients.length} คน)`, 'ok');
     render();
   } catch (err) {
@@ -268,6 +311,13 @@ function renderCharts(report, totals, level, hasPop) {
     data: { labels: months, datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: months.map(m => monthCount[m]), borderColor: '#2c6e91', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 }] },
     options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
+
+  const yearly = buildYearlyTrend();
+  drawChart('chartYearlyTrend', {
+    type: 'bar',
+    data: { labels: yearly.years.map(y => 'ปีงบ ' + y), datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: yearly.newPatients, backgroundColor: '#2c6e91' }] },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } },
+  });
 }
 
 // ---------- Population editor ----------
@@ -293,6 +343,7 @@ function savePopulationFromForm() {
     state.population[fy][code].pop15_60 = Number(input.value) || 0;
   });
   saveLocal();
+  markDirty();
   render();
   renderPopulationEditor();
 }
@@ -311,6 +362,7 @@ function saveSettingsFromForm() {
   state.settings.max_age_included = Number($('#setMaxAge').value) || 60;
   state.settings.current_fiscal_year_be = Number($('#setCurrentFy').value) || state.settings.current_fiscal_year_be;
   saveLocal();
+  markDirty();
   render();
   renderPopulationEditor();
 }
@@ -384,6 +436,25 @@ function publishData() {
   a.href = url; a.download = 'data.json';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+  unpublishedChanges = false;
+  const banner = document.getElementById('unpublishedBanner');
+  if (banner) banner.hidden = true;
+  const helper = document.getElementById('publishHelper');
+  if (helper) helper.hidden = false;
+}
+
+function clearAllData() {
+  if (!confirm('ล้างข้อมูลทั้งหมดในเครื่องนี้ (ไม่กระทบข้อมูลที่เผยแพร่ไปแล้วบน GitHub)? ต้องนำเข้า Excel ใหม่')) return;
+  state.patients = [];
+  state.population = {};
+  try { localStorage.removeItem(LS_KEY); localStorage.removeItem(RAW_FILE_KEY); } catch (e) {}
+  renderStoredFileInfo();
+  unpublishedChanges = false;
+  document.getElementById('unpublishedBanner').hidden = true;
+  document.getElementById('publishHelper').hidden = true;
+  setStatus('ล้างข้อมูลแล้ว', 'ok');
+  render();
+  renderPopulationEditor();
 }
 
 // ---------- init ----------
@@ -395,6 +466,11 @@ async function init() {
   render();
   renderPopulationEditor();
   renderSettingsEditor();
+  renderStoredFileInfo();
+
+  window.addEventListener('beforeunload', e => {
+    if (unpublishedChanges) { e.preventDefault(); e.returnValue = ''; }
+  });
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
@@ -412,6 +488,7 @@ async function init() {
   $('#publishBtn').addEventListener('click', publishData);
   $('#togglePopEditor').addEventListener('click', () => { $('#popEditor').hidden = !$('#popEditor').hidden; });
   $('#toggleSettingsEditor').addEventListener('click', () => { $('#settingsEditor').hidden = !$('#settingsEditor').hidden; });
+  $('#clearDataBtn').addEventListener('click', clearAllData);
   $('#saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
 }
 
