@@ -52,6 +52,7 @@ function analyze_area(array $r): array
     if ($r['h'] === 0) {
         $findings[] = [
             'level' => 'warn',
+            'category' => 'no_population',
             'title' => 'ยังไม่มีข้อมูลประชากร (H)',
             'detail' => 'ไม่สามารถคำนวณอัตราเข้าถึงบริการ (E) และผู้ป่วยประมาณการณ์ (I) ได้ เพราะยังไม่กรอกประชากร 15-60 ปีของพื้นที่นี้',
             'action' => 'กรอกข้อมูลประชากรที่เมนู "ประชากร/ประมาณการณ์"',
@@ -59,6 +60,7 @@ function analyze_area(array $r): array
     } elseif ($r['e'] < TARGET_ACCESS_RATE) {
         $findings[] = [
             'level' => 'danger',
+            'category' => 'low_access',
             'title' => "อัตราเข้าถึงบริการต่ำกว่าเป้า ({$r['e']}% < " . TARGET_ACCESS_RATE . '%)',
             'detail' => 'จำนวนผู้ป่วย SMI-V ที่ลงทะเบียนแล้ว (D) เทียบกับผู้ป่วยประมาณการณ์ (I) ยังไม่ถึงเป้าหมาย HDC ปีงบ 2569',
             'action' => 'เร่งคัดกรอง 5 สัญญาณเตือน (V-Care) ในพื้นที่ และตรวจสอบว่าส่งข้อมูล 1B030-1B033 เข้า HDC ครบหรือไม่ (มักตกหล่นจากการลงรหัส Z-code ผิดแทน 1B03x — ดูหน้า "คู่มือรหัส")',
@@ -68,6 +70,7 @@ function analyze_area(array $r): array
     if ($d > 0 && $repeatRate > THRESHOLD_REPEAT_VIOLENCE) {
         $findings[] = [
             'level' => 'danger',
+            'category' => 'high_repeat',
             'title' => "อัตราก่อความรุนแรงซ้ำสูง ({$repeatRate}% ของผู้ป่วย {$r['repeat_violence_count']}/{$d} คน)",
             'detail' => 'ผู้ป่วยกลุ่มนี้เคยถูกลงทะเบียนรหัส SMI-V (1B030-1B033) มากกว่า 1 ครั้ง แปลว่าเกิดเหตุรุนแรงซ้ำหลังติดตามแล้ว',
             'action' => 'จัด Conference ทีมสหวิชาชีพสำหรับเคสกลุ่มนี้ ทำ Individual Care Plan รายบุคคล และเพิ่มความถี่ติดตามเยี่ยมตามระดับความเสี่ยง (สีแดง=ทุก 7 วัน)',
@@ -77,6 +80,7 @@ function analyze_area(array $r): array
     if ($d > 0 && $zeroFollowRate > THRESHOLD_ZERO_FOLLOWUP) {
         $findings[] = [
             'level' => 'warn',
+            'category' => 'low_followup',
             'title' => "ผู้ป่วยไม่เคยติดตามซ้ำเลยสูง ({$zeroFollowRate}% ของผู้ป่วย {$r['zero_followup']}/{$d} คน)",
             'detail' => 'มารับบริการครั้งแรกแล้วไม่มีการติดตามครั้งถัดไปเลยในข้อมูลที่นำเข้า',
             'action' => 'ประสาน อสม./ทีม รพ.สต. ลงพื้นที่ติดตามเยี่ยมบ้าน และนัดประเมินซ้ำที่สถานบริการ เพื่อให้ครบเกณฑ์ "ติดตามต่อเนื่องอย่างน้อย 2 ครั้ง/ปีงบ"',
@@ -86,6 +90,7 @@ function analyze_area(array $r): array
     if (($r['missing_birth'] ?? 0) > 0 || ($r['missing_tambon'] ?? 0) > 0 || ($r['missing_followup'] ?? 0) > 0) {
         $findings[] = [
             'level' => 'info',
+            'category' => 'data_quality',
             'title' => 'ข้อมูลไม่ครบถ้วน',
             'detail' => "ไม่มีวันเกิด {$r['missing_birth']} ราย, ไม่มีตำบล {$r['missing_tambon']} ราย, ขาดการติดตาม (follow_last ว่าง) {$r['missing_followup']} ราย",
             'action' => 'ตรวจสอบคุณภาพข้อมูลที่ต้นทาง HIS/43แฟ้ม SPECIALPP ก่อนนำเข้าครั้งถัดไป',
@@ -95,6 +100,7 @@ function analyze_area(array $r): array
     if (($r['same_day_followup'] ?? 0) > 0) {
         $findings[] = [
             'level' => 'info',
+            'category' => 'same_day',
             'title' => "สงสัยลงรหัสผิด — วันติดตามล่าสุดตรงกับวันแรก ({$r['same_day_followup']} ราย)",
             'detail' => 'follow_last (วันที่ได้รับรหัส 1B037 ล่าสุด) เท่ากับ first_date_serv (วันที่ลงทะเบียน SMI-V ครั้งแรก) ในวันเดียวกัน ซึ่งไม่ควรเกิดขึ้นถ้ามีการติดตามจริงในภายหลัง',
             'action' => 'ตรวจสอบกับหน่วยบริการว่าลงรหัส 1B037 ซ้ำวันเดียวกับ 1B030-1B033 ครั้งแรกโดยไม่ได้ตั้งใจหรือไม่ (ดูหน้า "คู่มือรหัส")',
@@ -104,12 +110,103 @@ function analyze_area(array $r): array
     if (!$findings) {
         $findings[] = [
             'level' => 'ok',
+            'category' => 'ok',
             'title' => 'ไม่พบปัญหาตามเกณฑ์ที่ตั้งไว้',
             'detail' => 'อัตราเข้าถึงบริการ อัตราก่อซ้ำ และความครบถ้วนของข้อมูล อยู่ในเกณฑ์ที่ยอมรับได้',
             'action' => 'คงมาตรฐานการคัดกรองและติดตามต่อเนื่อง',
         ];
     }
     return $findings;
+}
+
+const FINDING_CATEGORY_LABELS = [
+    'no_population' => 'ยังไม่มีข้อมูลประชากร',
+    'low_access' => 'เข้าถึงบริการต่ำกว่าเป้า',
+    'high_repeat' => 'ก่อความรุนแรงซ้ำสูง',
+    'low_followup' => 'ไม่เคยติดตามซ้ำสูง',
+    'data_quality' => 'ข้อมูลไม่ครบถ้วน',
+    'same_day' => 'สงสัยลงรหัสผิด',
+    'ok' => 'ไม่พบปัญหา',
+];
+
+// นับจำนวนพื้นที่ที่พบปัญหาแต่ละประเภท จาก [['area'=>..,'findings'=>[...]], ...] — ใช้ทำกราฟสรุปแยกประเด็น
+function count_findings_by_category(array $areaAnalysis): array
+{
+    $counts = array_fill_keys(array_keys(FINDING_CATEGORY_LABELS), 0);
+    foreach ($areaAnalysis as $item) {
+        $seen = [];
+        foreach ($item['findings'] as $f) {
+            $cat = $f['category'] ?? 'other';
+            if (isset($counts[$cat]) && !isset($seen[$cat])) {
+                $counts[$cat]++;
+                $seen[$cat] = true;
+            }
+        }
+    }
+    unset($counts['ok']);
+    return array_filter($counts, fn($v) => $v > 0);
+}
+
+// รายชื่อผู้ป่วยที่มีปัญหา (สำหรับส่งกลับให้พื้นที่/หน่วยบริการตรวจสอบแก้ไข) — ไม่รวม cid/name เต็ม เพื่อความปลอดภัยข้อมูล ใช้ pid+hoscode ระบุตัวแทน
+function get_problem_patients(PDO $pdo, int $fy, string $level = 'ampur', string $areaFilter = '', ?string $dateFrom = null, ?string $dateTo = null): array
+{
+    $maxAge = max_age_included($pdo);
+    $params = ['fy' => $fy, 'max_age' => $maxAge];
+    $dateSql = '';
+    if ($dateFrom && $dateTo) {
+        $dateSql = ' AND p.first_date_serv BETWEEN :date_from AND :date_to';
+        $params['date_from'] = $dateFrom;
+        $params['date_to'] = $dateTo;
+    }
+    $areaSql = '';
+    if ($areaFilter !== '') {
+        $col = $level === 'hoscode' ? 'p.hoscode' : ($level === 'chw_addr' ? 'p.chw_addr' : 'p.ampur');
+        $areaSql = " AND $col = :area_filter";
+        $params['area_filter'] = $areaFilter;
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT p.hoscode, p.hosname, p.pid, p.cid, p.name, p.lname, p.birth, p.sex, p.chw_addr, p.tambon, p.ampur,
+                p.first_date_serv, p.date_serv_raw, p.diagcode_raw, p.b03x_raw, p.follow_last,
+                p.smiv_code_count, p.has_repeat_violence,
+                v.total_visits
+         FROM patients p
+         JOIN (SELECT patient_id, COUNT(*) total_visits FROM patient_visits GROUP BY patient_id) v ON v.patient_id = p.id
+         WHERE p.fiscal_year_be <= :fy
+           AND (p.age_at_fy_end IS NULL OR p.age_at_fy_end <= :max_age)
+           $dateSql $areaSql
+         ORDER BY p.hoscode, p.pid"
+    );
+    $stmt->execute($params);
+
+    // ปัญหา => คำแนะนำการดำเนินการที่เป็นรูปธรรม (แสดงคู่กันในไฟล์ export ให้พื้นที่ทำงานต่อได้เลย)
+    $actionFor = [
+        'ก่อความรุนแรงซ้ำ' => 'จัด Conference ทีมสหวิชาชีพ + ทำ Individual Care Plan รายบุคคล เพิ่มความถี่เยี่ยมตามระดับความเสี่ยง',
+        'ขาดการติดตาม (follow_last ว่าง)' => 'นัดติดตามอาการ/ลงพื้นที่เยี่ยมบ้านโดยเร็ว และลงรหัส 1B037 เมื่อประเมินแล้ว',
+        'ไม่เคยติดตามซ้ำ' => 'ประสาน อสม./รพ.สต. ติดตามเยี่ยมครั้งที่ 2 ให้ครบเกณฑ์ "ติดตามต่อเนื่องอย่างน้อย 2 ครั้ง/ปีงบ"',
+        'สงสัยลงรหัสผิด (ติดตาม=วันแรก)' => 'ตรวจสอบกับผู้บันทึกว่าลงรหัส 1B037 ซ้ำวันเดียวกับ 1B030-1B033 ครั้งแรกโดยไม่ได้ตั้งใจหรือไม่ แก้ไขผ่าน Data Correct',
+        'ไม่มีวันเกิด' => 'ตรวจสอบและเพิ่มวันเดือนปีเกิดในระบบ HIS ต้นทาง',
+        'ไม่มีตำบล' => 'ตรวจสอบและเพิ่มรหัสตำบลที่อยู่ในระบบ HIS ต้นทาง',
+    ];
+
+    $out = [];
+    foreach ($stmt as $r) {
+        $issues = [];
+        if ($r['has_repeat_violence']) $issues[] = 'ก่อความรุนแรงซ้ำ';
+        if ($r['follow_last'] === null) $issues[] = 'ขาดการติดตาม (follow_last ว่าง)';
+        if ((int) $r['total_visits'] === 1) $issues[] = 'ไม่เคยติดตามซ้ำ';
+        if ($r['follow_last'] !== null && $r['follow_last'] === $r['first_date_serv']) $issues[] = 'สงสัยลงรหัสผิด (ติดตาม=วันแรก)';
+        if ($r['birth'] === null) $issues[] = 'ไม่มีวันเกิด';
+        if ($r['tambon'] === null || $r['tambon'] === '') $issues[] = 'ไม่มีตำบล';
+
+        if ($issues) {
+            $r['issues'] = implode('; ', $issues);
+            $r['recommendations'] = implode(' | ', array_map(fn($i) => $actionFor[$i] ?? '', $issues));
+            $r['priority'] = $r['has_repeat_violence'] ? 'สูง' : (count($issues) >= 2 ? 'กลาง' : 'ปกติ');
+            $out[] = $r;
+        }
+    }
+    return $out;
 }
 
 // เรียก AI ท้องถิ่น (Ollama) ให้สรุปภาพรวมเป็นภาษาไทย ใช้เป็นส่วนเสริมกฎ analyze_area() ไม่ใช่แหล่งความจริงเดียว
@@ -147,6 +244,34 @@ function ai_summarize(array $totals, string $areaLabel, int $fy, bool $hasPop): 
     if ($errno || !$response) return null;
     $data = json_decode($response, true);
     return trim($data['response'] ?? '') ?: null;
+}
+
+// ข้อมูลเสริมสำหรับกราฟ: สัดส่วนเพศ + แนวโน้มผู้ป่วยใหม่รายเดือน (12 เดือนล่าสุดของปีงบ)
+function build_extra_charts(PDO $pdo, int $fy): array
+{
+    $sexStmt = $pdo->prepare('SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? GROUP BY sex');
+    $sexStmt->execute([$fy]);
+    $sex = ['ชาย' => 0, 'หญิง' => 0, 'ไม่ระบุ' => 0];
+    foreach ($sexStmt as $r) {
+        if ((int) $r['sex'] === 1) $sex['ชาย'] += (int) $r['c'];
+        elseif ((int) $r['sex'] === 2) $sex['หญิง'] += (int) $r['c'];
+        else $sex['ไม่ระบุ'] += (int) $r['c'];
+    }
+
+    $ceYearEnd = $fy - 543;
+    $rangeStart = date('Y-m-01', strtotime(($ceYearEnd - 1) . '-10-01'));
+    $rangeEnd = date('Y-m-t', strtotime($ceYearEnd . '-09-30'));
+    $trendStmt = $pdo->prepare(
+        "SELECT DATE_FORMAT(first_date_serv, '%Y-%m') AS ym, COUNT(*) c
+         FROM patients
+         WHERE first_date_serv BETWEEN :start AND :end
+         GROUP BY ym ORDER BY ym"
+    );
+    $trendStmt->execute(['start' => $rangeStart, 'end' => $rangeEnd]);
+    $trend = [];
+    foreach ($trendStmt as $r) $trend[$r['ym']] = (int) $r['c'];
+
+    return ['sex' => $sex, 'trend' => $trend];
 }
 
 const REPORT_LEVELS = [

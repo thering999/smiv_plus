@@ -9,15 +9,29 @@ require __DIR__ . '/includes/report_data.php';
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 $level = $_GET['level'] ?? 'ampur';
 $data = build_smiv_report($pdo, $fy, $level);
-$report = $data['report'];
-$totals = $data['totals'];
 $level = $data['level'];
+$areaOptions = $data['report'];
+$areaFilter = trim($_GET['area'] ?? '');
+
+$report = $data['report'];
+if ($areaFilter !== '') {
+    $report = array_values(array_filter($report, fn($r) => (string) $r['group_key'] === $areaFilter));
+}
+$totals = $data['totals'];
+if ($areaFilter !== '' && $report) {
+    $totals = $report[0];
+}
 $areaLabel = REPORT_LEVELS[$level];
+$areaQs = $areaFilter !== '' ? '&area=' . urlencode($areaFilter) : '';
 
 $ampurAnalysis = [];
 foreach ($report as $r) {
     $ampurAnalysis[] = ['ampur' => $r, 'findings' => analyze_area($r)];
 }
+$categoryCounts = count_findings_by_category($ampurAnalysis);
+$qualityAccess = quality_level_access($totals['e']);
+$score6m = score_quantitative($totals['g'], SCORE_SCALE_6M);
+$score10m = score_quantitative($totals['g'], SCORE_SCALE_10M);
 
 $overallRepeatRate = pct($totals['repeat_violence_count'] ?? 0, $totals['d']);
 $overallZeroFollowRate = pct($totals['zero_followup'] ?? 0, $totals['d']);
@@ -44,9 +58,18 @@ require __DIR__ . '/includes/header.php';
   <label>ปีงบประมาณ (พ.ศ.)</label>
   <input type="number" name="fy" value="<?= (int) $fy ?>">
   <label>มุมมอง</label>
-  <select name="level">
+  <select name="level" onchange="this.form.area.value=''; this.form.submit()">
     <?php foreach (REPORT_LEVELS as $lv => $lbl): ?>
       <option value="<?= $lv ?>" <?= $lv === $level ? 'selected' : '' ?>><?= htmlspecialchars($lbl) ?></option>
+    <?php endforeach; ?>
+  </select>
+  <label>เลือก<?= htmlspecialchars($areaLabel) ?></label>
+  <select name="area">
+    <option value="">— ทั้งหมด —</option>
+    <?php foreach ($areaOptions as $opt): ?>
+      <option value="<?= htmlspecialchars($opt['group_key']) ?>" <?= $areaFilter === (string) $opt['group_key'] ? 'selected' : '' ?>>
+        <?= htmlspecialchars($opt['ampur_name']) ?> (D=<?= $opt['d'] ?>)
+      </option>
     <?php endforeach; ?>
   </select>
   <button type="submit">แสดงผล</button>
@@ -55,7 +78,10 @@ require __DIR__ . '/includes/header.php';
 <?php if (!$report): ?>
   <p class="alert">ไม่มีข้อมูลปีงบ <?= (int) $fy ?> — นำเข้าไฟล์ Excel ก่อน</p>
 <?php else: ?>
-<p><a class="btn-export" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $level) ?>">⬇ ส่งออก Excel (<?= htmlspecialchars($areaLabel) ?>)</a></p>
+<p>
+  <a class="btn-export" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">⬇ ส่งออก Excel (<?= htmlspecialchars($areaLabel) ?>)</a>
+  <a class="btn-export" style="background:var(--danger)" href="<?= url('/export_issues.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">⬇ ส่งคืนรายชื่อที่มีปัญหา</a>
+</p>
 
 <h2>ภาพรวม</h2>
 <div class="kpi-grid">

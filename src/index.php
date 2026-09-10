@@ -39,12 +39,26 @@ $level = $_GET['level'] ?? 'ampur';
 $dateFrom = trim($_GET['date_from'] ?? '') ?: null;
 $dateTo = trim($_GET['date_to'] ?? '') ?: null;
 $data = build_smiv_report($pdo, $fy, $level, $dateFrom, $dateTo);
-$report = $data['report'];
-$totals = $data['totals'];
-$maxAge = $data['max_age'];
 $level = $data['level'];
+$areaOptions = $data['report']; // รายการพื้นที่ทั้งหมดของมุมมองนี้ ใช้ทำ dropdown กรองซ้อน
+$areaFilter = trim($_GET['area'] ?? '');
+
+$report = $data['report'];
+if ($areaFilter !== '') {
+    $report = array_values(array_filter($report, fn($r) => (string) $r['group_key'] === $areaFilter));
+}
+$totals = $data['totals'];
+if ($areaFilter !== '' && $report) {
+    $totals = $report[0]; // เลือกพื้นที่เดียว ใช้ค่าของแถวนั้นแทนผลรวม
+}
+$maxAge = $data['max_age'];
 $hasPop = $data['has_population_data'];
 $areaLabel = REPORT_LEVELS[$level];
+$areaQs = $areaFilter !== '' ? '&area=' . urlencode($areaFilter) : '';
+$dateQs = ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '');
+
+$extra = build_extra_charts($pdo, $fy);
+$lastImport = $pdo->query('SELECT filename, imported_at, row_count FROM import_batches ORDER BY id DESC LIMIT 1')->fetch();
 
 $wantAi = ($_GET['ai'] ?? '') === '1';
 $aiSummary = $wantAi && $report ? ai_summarize($totals, $areaLabel, $fy, $hasPop) : null;
@@ -53,11 +67,17 @@ $areaAnalysis = [];
 foreach ($report as $r) {
     $areaAnalysis[] = ['area' => $r, 'findings' => analyze_area($r)];
 }
+$categoryCounts = count_findings_by_category($areaAnalysis);
 
 $pageTitle = 'Dashboard SMI-V - SMI-V Plus';
 require __DIR__ . '/includes/header.php';
 ?>
 <h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
+<?php if ($lastImport): ?>
+  <p class="note">ข้อมูลล่าสุด: นำเข้าเมื่อ <?= htmlspecialchars($lastImport['imported_at']) ?> จากไฟล์ <?= htmlspecialchars($lastImport['filename']) ?> (<?= number_format($lastImport['row_count']) ?> แถว) · เปิดหน้านี้เมื่อ <?= date('Y-m-d H:i') ?></p>
+<?php else: ?>
+  <p class="alert">ยังไม่เคยนำเข้าข้อมูล — ใช้เมนู "นำเข้าข้อมูล Excel" ด้านล่าง</p>
+<?php endif; ?>
 
 <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
 <details class="table-details" <?= ($importMessage || $importError) ? 'open' : '' ?>>
@@ -78,9 +98,18 @@ require __DIR__ . '/includes/header.php';
   <label>ปีงบประมาณ (พ.ศ.)</label>
   <input type="number" name="fy" value="<?= (int) $fy ?>" min="2560" max="2600">
   <label>มุมมอง</label>
-  <select name="level">
+  <select name="level" onchange="this.form.area.value=''; this.form.submit()">
     <?php foreach (REPORT_LEVELS as $lv => $lbl): ?>
       <option value="<?= $lv ?>" <?= $lv === $level ? 'selected' : '' ?>><?= htmlspecialchars($lbl) ?></option>
+    <?php endforeach; ?>
+  </select>
+  <label>เลือก<?= htmlspecialchars($areaLabel) ?></label>
+  <select name="area">
+    <option value="">— ทั้งหมด —</option>
+    <?php foreach ($areaOptions as $opt): ?>
+      <option value="<?= htmlspecialchars($opt['group_key']) ?>" <?= $areaFilter === (string) $opt['group_key'] ? 'selected' : '' ?>>
+        <?= htmlspecialchars($opt['ampur_name']) ?> (D=<?= $opt['d'] ?>)
+      </option>
     <?php endforeach; ?>
   </select>
   <label>วันที่มารับบริการครั้งแรก ตั้งแต่</label>
@@ -88,15 +117,16 @@ require __DIR__ . '/includes/header.php';
   <label>ถึง</label>
   <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo ?? '') ?>">
   <button type="submit">แสดงผล</button>
-  <?php if ($dateFrom || $dateTo): ?><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level) ?>">ล้างช่วงวันที่</a><?php endif; ?>
+  <?php if ($dateFrom || $dateTo): ?><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">ล้างช่วงวันที่</a><?php endif; ?>
 </form>
 
 <?php if ($report): ?>
 <p>
-  <a class="btn-export" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $level . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '')) ?>">⬇ ส่งออก Excel (<?= htmlspecialchars(REPORT_LEVELS[$level]) ?>)</a>
+  <a class="btn-export" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $level . $areaQs . $dateQs) ?>">⬇ ส่งออก Excel (<?= htmlspecialchars(REPORT_LEVELS[$level]) ?><?= $areaFilter !== '' ? ' - ' . htmlspecialchars($totals['ampur_name'] ?? '') : '' ?>)</a>
   <?php foreach (REPORT_LEVELS as $lv => $lbl): if ($lv === $level) continue; ?>
-    <a class="btn-export btn-export-alt" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $lv . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '')) ?>">⬇ <?= htmlspecialchars($lbl) ?></a>
+    <a class="btn-export btn-export-alt" href="<?= url('/export.php?fy=' . (int) $fy . '&level=' . $lv . $dateQs) ?>">⬇ <?= htmlspecialchars($lbl) ?></a>
   <?php endforeach; ?>
+  <a class="btn-export" style="background:var(--danger)" href="<?= url('/export_issues.php?fy=' . (int) $fy . '&level=' . $level . $areaQs . $dateQs) ?>">⬇ ส่งคืนรายชื่อที่มีปัญหา (ให้พื้นที่ตรวจสอบ)</a>
 </p>
 <?php endif; ?>
 
@@ -152,6 +182,22 @@ require __DIR__ . '/includes/header.php';
     <canvas id="chartFollowSummary"></canvas>
   </div>
   <?php endif; ?>
+  <div class="chart-box">
+    <h3>อัตราก่อความรุนแรงซ้ำ <?= htmlspecialchars($areaLabel) ?> (%)</h3>
+    <canvas id="chartRepeatRate"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>แนวโน้มผู้ป่วยใหม่รายเดือน (ปีงบ <?= (int) $fy ?>)</h3>
+    <canvas id="chartMonthlyTrend"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>สัดส่วนเพศ (ผู้ป่วยสะสมทั้งหมด)</h3>
+    <canvas id="chartSex"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>สัดส่วนการติดตาม <?= htmlspecialchars($areaLabel) ?> (ไม่เคย/1 ครั้ง/≥2 ครั้ง)</h3>
+    <canvas id="chartFollowByArea"></canvas>
+  </div>
 </div>
 <h2>สรุปด้วย AI</h2>
 <?php if ($aiSummary): ?>
@@ -162,7 +208,14 @@ require __DIR__ . '/includes/header.php';
 <?php elseif ($wantAi): ?>
   <p class="alert">เรียก AI ไม่สำเร็จ (Ollama ไม่ตอบสนองหรือ timeout) — ดูสรุปกฎเกณฑ์ด้านล่างแทนได้</p>
 <?php else: ?>
-  <p class="note"><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '') . '&ai=1') ?>">▶ ให้ AI ช่วยสรุปภาพรวม</a> (เรียก Ollama ท้องถิ่น อาจใช้เวลาสักครู่)</p>
+  <p class="note"><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level . $areaQs . $dateQs . '&ai=1') ?>">▶ ให้ AI ช่วยสรุปภาพรวม</a> (เรียก Ollama ท้องถิ่น อาจใช้เวลาสักครู่)</p>
+<?php endif; ?>
+
+<?php if ($categoryCounts): ?>
+<h2>สรุปปัญหาแยกประเด็น (จำนวนพื้นที่ที่พบ)</h2>
+<div class="chart-box" style="max-width:700px;margin-bottom:24px">
+  <canvas id="chartIssueCategory"></canvas>
+</div>
 <?php endif; ?>
 
 <h2>สรุปปัญหาแยกรายพื้นที่ (<?= htmlspecialchars($areaLabel) ?>)</h2>
@@ -178,7 +231,7 @@ require __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
   </div>
 <?php endforeach; ?>
-<p class="note">ดูกราฟเพิ่มเติมแยกรายประเด็น (อัตราก่อความรุนแรงซ้ำ, สัดส่วนการติดตาม) และข้อเสนอแนะภาพรวมที่หน้า <a href="<?= url('/analysis.php?fy=' . (int) $fy . '&level=' . $level) ?>">วิเคราะห์ปัญหา</a></p>
+<p class="note">ดูกราฟเพิ่มเติมแยกรายประเด็น (อัตราก่อความรุนแรงซ้ำ, สัดส่วนการติดตาม) และข้อเสนอแนะภาพรวมที่หน้า <a href="<?= url('/analysis.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">วิเคราะห์ปัญหา</a></p>
 
 <details class="table-details">
 <summary>ตารางแบบเต็ม (รูปแบบ HDC Template) — <?= htmlspecialchars($areaLabel) ?></summary>
@@ -289,6 +342,72 @@ new Chart(document.getElementById('chartFollowSummary'), {
     }]
   },
   options: { responsive: true }
+});
+<?php endif; ?>
+
+new Chart(document.getElementById('chartRepeatRate'), {
+  type: 'bar',
+  data: {
+    labels: summaryLabels,
+    datasets: [{
+      label: 'อัตราก่อความรุนแรงซ้ำ %',
+      data: <?= json_encode(array_map(fn($r) => pct($r['repeat_violence_count'], $r['d']), $report)) ?>,
+      backgroundColor: <?= json_encode(array_map(fn($r) => pct($r['repeat_violence_count'], $r['d']) > 15 ? '#c0392b' : '#1e7e34', $report)) ?>,
+    }]
+  },
+  options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+});
+
+new Chart(document.getElementById('chartMonthlyTrend'), {
+  type: 'line',
+  data: {
+    labels: <?= json_encode(array_keys($extra['trend'])) ?>,
+    datasets: [{
+      label: 'ผู้ป่วยใหม่ (คน)',
+      data: <?= json_encode(array_values($extra['trend'])) ?>,
+      borderColor: '#2c6e91', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2,
+    }]
+  },
+  options: { responsive: true, scales: { y: { beginAtZero: true } } }
+});
+
+new Chart(document.getElementById('chartSex'), {
+  type: 'pie',
+  data: {
+    labels: <?= json_encode(array_keys($extra['sex']), JSON_UNESCAPED_UNICODE) ?>,
+    datasets: [{
+      data: <?= json_encode(array_values($extra['sex'])) ?>,
+      backgroundColor: ['#2c6e91', '#e07b9e', '#9aa5ad'],
+    }]
+  },
+  options: { responsive: true }
+});
+
+new Chart(document.getElementById('chartFollowByArea'), {
+  type: 'bar',
+  data: {
+    labels: summaryLabels,
+    datasets: [
+      { label: 'ไม่เคยติดตาม', data: <?= json_encode(array_column($report, 'zero_followup')) ?>, backgroundColor: '#c0392b' },
+      { label: 'ติดตาม 1 ครั้ง', data: <?= json_encode(array_column($report, 'j')) ?>, backgroundColor: '#e0a63c' },
+      { label: 'ติดตาม ≥2 ครั้ง', data: <?= json_encode(array_column($report, 'm')) ?>, backgroundColor: '#1e7e34' },
+    ]
+  },
+  options: { responsive: true, scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } }, indexAxis: 'y' }
+});
+
+<?php if ($categoryCounts): ?>
+new Chart(document.getElementById('chartIssueCategory'), {
+  type: 'bar',
+  data: {
+    labels: <?= json_encode(array_map(fn($k) => FINDING_CATEGORY_LABELS[$k], array_keys($categoryCounts)), JSON_UNESCAPED_UNICODE) ?>,
+    datasets: [{
+      label: 'จำนวนพื้นที่ที่พบปัญหานี้',
+      data: <?= json_encode(array_values($categoryCounts)) ?>,
+      backgroundColor: '#c0392b',
+    }]
+  },
+  options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
 });
 <?php endif; ?>
 </script>

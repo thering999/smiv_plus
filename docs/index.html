@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMI-V Plus — คู่มือส่งมอบระบบ</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#1a1f24;--border:#dfe3e7;--primary:#2c6e91;--danger:#c0392b;--success:#1e7e34}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+header{background:linear-gradient(135deg,#2c6e91,#1a4a63);color:#fff;padding:48px 20px}
+header .inner{max-width:900px;margin:0 auto}
+header h1{margin:0 0 8px;font-size:1.8em}
+header p{margin:0;opacity:.9}
+.badge{display:inline-block;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px;font-size:.85em;margin-top:12px}
+main{max-width:900px;margin:0 auto;padding:32px 20px}
+section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:24px;margin-bottom:20px}
+h2{margin-top:0;color:var(--primary);border-bottom:2px solid var(--border);padding-bottom:8px}
+.alert{background:#fdecea;color:var(--danger);border:1px solid #f5c6cb;padding:14px 16px;border-radius:6px;margin-bottom:20px}
+.alert strong{display:block;margin-bottom:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.feature{border-left:4px solid var(--primary);background:#eaf1f5;padding:10px 14px;border-radius:0 4px 4px 0}
+.feature strong{display:block;margin-bottom:2px}
+code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:.9em}
+pre{background:#1a1f24;color:#e6e6e6;padding:16px;border-radius:6px;overflow-x:auto;font-size:.9em}
+table{border-collapse:collapse;width:100%;font-size:.92em}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:left}
+th{background:#eaf1f5}
+.footer-note{text-align:center;color:#6b7280;font-size:.85em;padding:20px}
+a{color:var(--primary)}
+.status-ok{color:var(--success);font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>🧠 SMI-V Plus</h1>
+    <p>ระบบรายงาน "ร้อยละของผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) ในเขตสุขภาพเข้าถึงบริการได้รับการดูแลต่อเนื่องและไม่ก่อความรุนแรงซ้ำ" ตามรายงานมาตรฐาน HDC</p>
+    <span class="badge">คู่มือส่งมอบระบบ (หน้านี้เป็นเอกสารสถิต ไม่ใช่ตัวระบบที่ใช้งานจริง)</span>
+  </div>
+</header>
+
+<main>
+  <div class="alert">
+    <strong>⚠️ หน้านี้คือคู่มือส่งมอบ ไม่ใช่ระบบที่ใช้งานได้จริง</strong>
+    ระบบ SMI-V Plus เป็นเว็บแอป PHP + MySQL ที่ต้องรันบนเซิร์ฟเวอร์จริง (Docker) — GitHub Pages โฮสต์ได้แค่ไฟล์ static (HTML/CSS/JS) จึงรัน login, ฐานข้อมูล, นำเข้า/ส่งออก Excel หรือ AI ไม่ได้ในหน้านี้ ต้อง deploy ตามขั้นตอนด้านล่างเพื่อใช้งานจริง
+  </div>
+
+  <section>
+    <h2>ระบบทำอะไรได้บ้าง</h2>
+    <div class="grid">
+      <div class="feature"><strong>📥 นำเข้าข้อมูล Excel</strong>รองรับไฟล์ exchange_file.xlsx (ชีต Data) ผ่านหน้าเว็บโดยตรง — ทดสอบแล้วนำเข้าสำเร็จ 1,482 แถว</div>
+      <div class="feature"><strong>📊 Dashboard ครบวงจร</strong>KPI, กราฟ 8+ ชนิด, ตารางรูปแบบ HDC Template ในหน้าเดียว</div>
+      <div class="feature"><strong>🗺️ มุมมองหลายระดับ</strong>รายอำเภอ / รายหน่วยบริการ / รายจังหวัด พร้อมกรองช่วงวันที่และเลือกพื้นที่เจาะจง</div>
+      <div class="feature"><strong>🤖 สรุปด้วย AI</strong>เรียก Ollama (LLM ท้องถิ่น) สรุปสถานการณ์เป็นภาษาไทย</div>
+      <div class="feature"><strong>🔍 วิเคราะห์ปัญหาอัตโนมัติ</strong>กฎเกณฑ์ตรวจสอบย้อนกลับได้ (ไม่ใช่ black-box) พร้อมข้อเสนอแนะเชิงปฏิบัติ</div>
+      <div class="feature"><strong>📤 ส่งออก Excel</strong>รายงานสรุปและ "รายชื่อผู้ป่วยที่มีปัญหา" พร้อมคำแนะนำ ส่งคืนพื้นที่ตรวจสอบได้ทันที</div>
+      <div class="feature"><strong>📖 คู่มือรหัส SMI-V</strong>อ้างอิงรหัส 1B030-1B037 และตาราง Z-code ที่มักลงผิด ในตัวระบบ</div>
+      <div class="feature"><strong>🔐 ระบบผู้ใช้</strong>Login + สิทธิ์ admin/viewer, ล็อกบัญชีอัตโนมัติเมื่อลองรหัสผิดหลายครั้ง</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>สถานะการตรวจสอบข้อมูล</h2>
+    <p>ทดสอบกับข้อมูลจริง 1,482 แถว (7 อำเภอ จ.มุกดาหาร):</p>
+    <table>
+      <tr><th>รายการตรวจ</th><th>ผล</th></tr>
+      <tr><td>PID ซ้ำ (hoscode+pid)</td><td class="status-ok">ไม่พบ</td></tr>
+      <tr><td>รหัส b03x นอกช่วง 1B030-1B033</td><td class="status-ok">ไม่พบ</td></tr>
+      <tr><td>วันที่ผิดปกติ (เกิดหลังวันรับบริการ, ติดตามก่อนวันแรก)</td><td class="status-ok">ไม่พบ</td></tr>
+      <tr><td>อายุ ณ สิ้นปีงบผิดปกติ</td><td class="status-ok">ไม่พบ</td></tr>
+      <tr><td>ข้อมูลอ้างอิงตำบล/อำเภอไม่ครบ</td><td>พบ 1 ราย (chw_addr/ampur/tambon ว่าง)</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>เริ่มต้นใช้งานจริง (Deploy)</h2>
+    <p>Stack: PHP 8.2 (Apache) + MySQL 8 + PhpSpreadsheet + Docker Compose</p>
+    <pre>git clone https://github.com/thering999/smiv_plus.git
+cd smiv_plus
+cp .env.example .env    # ตั้งรหัสผ่านฐานข้อมูลใหม่
+docker compose up -d --build
+docker compose exec web composer install
+docker compose exec web php bin/create_admin.php admin "รหัสผ่านที่ปลอดภัย"</pre>
+    <p>เปิด <code>http://localhost:8081/</code> (หรือโดเมน/พอร์ตที่ตั้งค่าไว้บนเซิร์ฟเวอร์จริง)</p>
+  </section>
+
+  <section>
+    <h2>สูตรคำนวณหลัก (อ้างอิงเอกสาร HDC Template)</h2>
+    <table>
+      <tr><th>ตัวแปร</th><th>ความหมาย</th></tr>
+      <tr><td>B / C / D</td><td>ผู้ป่วยเก่า / ใหม่ / รวม (D=B+C)</td></tr>
+      <tr><td>H</td><td>ประชากร 15-60 ปี ย้อนหลัง 2 ปี (กรอกเอง)</td></tr>
+      <tr><td>I</td><td>ผู้ป่วยประมาณการณ์ = H × 4.37% × 11.92% (คำนวณอัตโนมัติ)</td></tr>
+      <tr><td>E</td><td>อัตราเข้าถึงบริการ = D/I×100 (เป้า &gt;40%)</td></tr>
+      <tr><td>J,K,L / M,N,O</td><td>ติดตาม 1 ครั้ง / ติดตาม ≥2 ครั้ง และอัตราไม่ก่อซ้ำ</td></tr>
+    </table>
+    <p>"ก่อความรุนแรงซ้ำ" นับจากจำนวนรหัส <code>b03x</code> (1B030-1B033) ที่ถูกลงทะเบียน <strong>มากกว่า 1 ครั้ง</strong> ต่อผู้ป่วย — รายละเอียดเต็มดูที่ <a href="https://github.com/thering999/smiv_plus/blob/main/README.md">README.md</a></p>
+  </section>
+
+  <section>
+    <h2>ข้อจำกัดที่ต้องทราบ</h2>
+    <ul>
+      <li>ยังไม่ตัดผู้เสียชีวิตออกจากตัวนับ (ไม่มีช่องทางเชื่อมฐานข้อมูลกระทรวงมหาดไทย)</li>
+      <li>ข้อมูลประชากร (H) ต้องกรอกเองรายอำเภอ ไม่ได้มาจากไฟล์นำเข้า</li>
+      <li>สรุปด้วย AI ต้องมี Ollama รันอยู่บนเครื่อง/เครือข่ายเดียวกัน</li>
+    </ul>
+  </section>
+
+  <div class="footer-note">
+    Repository: <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a>
+  </div>
+</main>
+</body>
+</html>

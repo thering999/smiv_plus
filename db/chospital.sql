@@ -17,10 +17,10 @@ SET FOREIGN_KEY_CHECKS=0;
 DROP TABLE IF EXISTS `chospital`;
 CREATE TABLE `chospital` (
   `hoscode` varchar(5) NOT NULL DEFAULT '',
-  `hosname` varchar(255) DEFAULT NULL,
+  `hosname` text DEFAULT NULL,
   `hostype` char(2) DEFAULT NULL,
-  `address` varchar(50) DEFAULT NULL,
-  `road` varchar(50) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `road` text DEFAULT NULL,
   `mu` varchar(2) DEFAULT '00',
   `subdistcode` char(2) DEFAULT '00',
   `distcode` char(2) DEFAULT '00',
