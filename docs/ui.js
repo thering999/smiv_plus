@@ -452,21 +452,27 @@ function markPublished() {
 }
 
 // ---------- Publish ตรงเข้า GitHub (ทับ docs/data.json ทันที) ----------
-// ⚠️ ตามคำขอผู้ใช้ที่ยืนยันแล้วหลังรับทราบความเสี่ยง: ฝัง token ถาวรในโค้ดนี้ (ไม่ถาม/ไม่หมดอายุเมื่อปิดแท็บ)
-// จำกัดขอบเขตความเสียหายด้วย fine-grained token ที่ scope แค่ repo นี้ repo เดียว + สิทธิ์ Contents:write เท่านั้น
-// (ไม่ใช่ token เข้าถึงทั้งบัญชี) — token หมดอายุตาม expiration ที่ตั้งไว้ตอนสร้าง (90 วัน) ต้องสร้างใหม่แล้วมาแทนที่บรรทัดนี้
+// GitHub push-protection บล็อกการ commit token ที่ฝังถาวรในซอร์สโค้ด (สแกนเจอ secret จริง)
+// จึงเก็บ token ไว้ใน localStorage ของเบราว์เซอร์เครื่องนี้แทน — ถามแค่ครั้งเดียวตลอดไป (ไม่ใช่ทุก session)
+// ไม่เคย commit เข้า git และไม่อยู่ในซอร์สโค้ดที่เผยแพร่
 const GH_OWNER = 'thering999';
 const GH_REPO = 'smiv_plus';
 const GH_PATH = 'docs/data.json';
-const GH_EMBEDDED_TOKEN = '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';
+const GH_TOKEN_KEY = 'smiv_gh_token';
 
 function getGithubToken() {
-  return GH_EMBEDDED_TOKEN;
+  return localStorage.getItem(GH_TOKEN_KEY) || '';
 }
 
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
-  const token = getGithubToken();
+  let token = getGithubToken();
+  if (!token) {
+    token = prompt('วาง GitHub token ของคุณ (fine-grained, สิทธิ์ Contents: Read and write เฉพาะ repo smiv_plus)\nจะถูกจำไว้ในเครื่อง/เบราว์เซอร์นี้ถาวร ครั้งต่อไปกดปุ่มแล้วอัปโหลดได้เลยไม่ถามซ้ำ:');
+    if (!token) return;
+    localStorage.setItem(GH_TOKEN_KEY, token.trim());
+    token = token.trim();
+  }
 
   statusEl.textContent = 'กำลังอัปโหลดเข้า GitHub...';
   statusEl.className = 'status';
@@ -500,7 +506,7 @@ async function publishToGithub() {
   } catch (err) {
     statusEl.textContent = '❌ ล้มเหลว: ' + err.message + ' (เช็คว่า token ยังไม่หมดอายุ/มีสิทธิ์ Contents:write)';
     statusEl.className = 'status error';
-    sessionStorage.removeItem(GH_TOKEN_KEY);
+    localStorage.removeItem(GH_TOKEN_KEY);
   }
 }
 
