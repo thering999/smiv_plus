@@ -3,113 +3,108 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SMI-V Plus — คู่มือส่งมอบระบบ</title>
-<style>
-:root{--bg:#f4f6f8;--card:#fff;--text:#1a1f24;--border:#dfe3e7;--primary:#2c6e91;--danger:#c0392b;--success:#1e7e34}
-*{box-sizing:border-box}
-body{margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
-header{background:linear-gradient(135deg,#2c6e91,#1a4a63);color:#fff;padding:48px 20px}
-header .inner{max-width:900px;margin:0 auto}
-header h1{margin:0 0 8px;font-size:1.8em}
-header p{margin:0;opacity:.9}
-.badge{display:inline-block;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px;font-size:.85em;margin-top:12px}
-main{max-width:900px;margin:0 auto;padding:32px 20px}
-section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:24px;margin-bottom:20px}
-h2{margin-top:0;color:var(--primary);border-bottom:2px solid var(--border);padding-bottom:8px}
-.alert{background:#fdecea;color:var(--danger);border:1px solid #f5c6cb;padding:14px 16px;border-radius:6px;margin-bottom:20px}
-.alert strong{display:block;margin-bottom:4px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.feature{border-left:4px solid var(--primary);background:#eaf1f5;padding:10px 14px;border-radius:0 4px 4px 0}
-.feature strong{display:block;margin-bottom:2px}
-code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:.9em}
-pre{background:#1a1f24;color:#e6e6e6;padding:16px;border-radius:6px;overflow-x:auto;font-size:.9em}
-table{border-collapse:collapse;width:100%;font-size:.92em}
-th,td{border:1px solid var(--border);padding:8px 10px;text-align:left}
-th{background:#eaf1f5}
-.footer-note{text-align:center;color:#6b7280;font-size:.85em;padding:20px}
-a{color:var(--primary)}
-.status-ok{color:var(--success);font-weight:600}
-</style>
+<title>SMI-V Plus</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 </head>
 <body>
-<header>
-  <div class="inner">
-    <h1>🧠 SMI-V Plus</h1>
-    <p>ระบบรายงาน "ร้อยละของผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) ในเขตสุขภาพเข้าถึงบริการได้รับการดูแลต่อเนื่องและไม่ก่อความรุนแรงซ้ำ" ตามรายงานมาตรฐาน HDC</p>
-    <span class="badge">คู่มือส่งมอบระบบ (หน้านี้เป็นเอกสารสถิต ไม่ใช่ตัวระบบที่ใช้งานจริง)</span>
-  </div>
+<header class="topbar">
+  <div class="brand">🧠 SMI-V Plus — ระบบรายงาน SMI-V เขตสุขภาพ (static, ไม่มี server)</div>
+  <div id="publishedAt" class="note" style="color:#fff"></div>
 </header>
 
 <main>
-  <div class="alert">
-    <strong>⚠️ หน้านี้คือคู่มือส่งมอบ ไม่ใช่ระบบที่ใช้งานได้จริง</strong>
-    ระบบ SMI-V Plus เป็นเว็บแอป PHP + MySQL ที่ต้องรันบนเซิร์ฟเวอร์จริง (Docker) — GitHub Pages โฮสต์ได้แค่ไฟล์ static (HTML/CSS/JS) จึงรัน login, ฐานข้อมูล, นำเข้า/ส่งออก Excel หรือ AI ไม่ได้ในหน้านี้ ต้อง deploy ตามขั้นตอนด้านล่างเพื่อใช้งานจริง
+<h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
+<p class="note">ระบบนี้ทำงานทั้งหมดใน browser (ไม่มี server/ฐานข้อมูล) — ข้อมูลที่นำเข้าจะถูกเก็บไว้ในเครื่องคุณ (localStorage) เท่านั้น จนกว่าจะกด "เผยแพร่" เพื่อสร้างไฟล์ data.json ให้ผู้ดูแลนำไป commit เข้า repo ให้ทุกคนเห็นร่วมกัน</p>
+
+<div class="card">
+  <h2 style="margin-top:0;border:none">นำเข้าข้อมูล Excel</h2>
+  <p class="note">ไฟล์ .xlsx ชีตชื่อ <code>Data</code> หัวคอลัมน์: hoscode, hosname, pid, cid, name, lname, birth, sex, chw_addr, tambon, ampur, first_date_serv, date_serv, diagcode, b03x, follow_last</p>
+  <input type="file" id="xlsxFile" accept=".xlsx">
+  <div id="importStatus" class="status"></div>
+  <p style="margin-top:14px">
+    <button class="btn" id="publishBtn">📤 เผยแพร่ข้อมูล (สร้าง data.json)</button>
+    <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
+  </p>
+  <div id="popEditor" hidden style="margin-top:14px">
+    <p class="note">H = ประชากร 15-60 ปี ของแต่ละอำเภอ (กรอกเอง) — I คำนวณอัตโนมัติจาก H × 4.37% × 11.92%</p>
+    <table class="report-table" style="max-width:600px">
+      <thead><tr><th>รหัส</th><th>อำเภอ</th><th>ประชากร H</th><th>ประมาณการณ์ I</th></tr></thead>
+      <tbody id="popTableBody"></tbody>
+    </table>
+    <button class="btn" id="savePopBtn" style="margin-top:10px">บันทึกประชากร</button>
+  </div>
+</div>
+
+<form class="filter-bar card" onsubmit="return false">
+  <div><label>ปีงบประมาณ (พ.ศ.)</label><input type="number" id="fySelect" value="2569" min="2560" max="2600"></div>
+  <div><label>มุมมอง</label>
+    <select id="levelSelect">
+      <option value="ampur">รายอำเภอ</option>
+      <option value="hoscode">รายหน่วยบริการ</option>
+      <option value="chw_addr">รายจังหวัด (ภูมิลำเนาผู้ป่วย)</option>
+    </select>
+  </div>
+  <div><label>เลือกพื้นที่</label><select id="areaSelect"><option value="">— ทั้งหมด —</option></select></div>
+  <div><label>วันที่มารับบริการครั้งแรก ตั้งแต่</label><input type="date" id="dateFrom"></div>
+  <div><label>ถึง</label><input type="date" id="dateTo"></div>
+  <div><button type="button" class="btn btn-outline" id="clearDates">ล้างช่วงวันที่</button></div>
+</form>
+
+<div id="emptyState" class="alert" hidden>ยังไม่มีข้อมูล — อัปโหลดไฟล์ Excel ด้านบน หรือรอผู้ดูแลเผยแพร่ข้อมูล (data.json)</div>
+
+<div id="dashboard" hidden>
+  <div id="popWarning" class="alert" hidden>ยังไม่มีข้อมูลประชากร 15-60 ปี (H) — อัตราเข้าถึงบริการ (E) จะเป็น 0 จนกว่าจะกรอกที่ปุ่ม "ประชากร/ประมาณการณ์"</div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">อัตราเข้าถึงบริการ (E)</div><div class="kpi-value" id="kpiAccess">0%</div><div class="kpi-target">เป้า &gt; 40%</div></div>
+    <div class="kpi-card"><div class="kpi-label">ผู้ป่วย SMI-V ทั้งหมด (D)</div><div class="kpi-value" id="kpiD">0</div><div class="kpi-target" id="kpiDsub"></div></div>
+    <div class="kpi-card"><div class="kpi-label">ร้อยละต่อเนื่องไม่ก่อซ้ำ (G)</div><div class="kpi-value" id="kpiG">0%</div><div class="kpi-target" id="kpiGsub"></div></div>
+    <div class="kpi-card"><div class="kpi-label">ขาดการติดตาม</div><div class="kpi-value" id="kpiMissing">0</div><div class="kpi-target">ไม่เคยได้รับรหัส 1B037</div></div>
+    <div class="kpi-card"><div class="kpi-label" id="kpiAreaLabel">พื้นที่</div><div class="kpi-value" id="kpiArea">0</div></div>
   </div>
 
-  <section>
-    <h2>ระบบทำอะไรได้บ้าง</h2>
-    <div class="grid">
-      <div class="feature"><strong>📥 นำเข้าข้อมูล Excel</strong>รองรับไฟล์ exchange_file.xlsx (ชีต Data) ผ่านหน้าเว็บโดยตรง — ทดสอบแล้วนำเข้าสำเร็จ 1,482 แถว</div>
-      <div class="feature"><strong>📊 Dashboard ครบวงจร</strong>KPI, กราฟ 8+ ชนิด, ตารางรูปแบบ HDC Template ในหน้าเดียว</div>
-      <div class="feature"><strong>🗺️ มุมมองหลายระดับ</strong>รายอำเภอ / รายหน่วยบริการ / รายจังหวัด พร้อมกรองช่วงวันที่และเลือกพื้นที่เจาะจง</div>
-      <div class="feature"><strong>🤖 สรุปด้วย AI</strong>เรียก Ollama (LLM ท้องถิ่น) สรุปสถานการณ์เป็นภาษาไทย</div>
-      <div class="feature"><strong>🔍 วิเคราะห์ปัญหาอัตโนมัติ</strong>กฎเกณฑ์ตรวจสอบย้อนกลับได้ (ไม่ใช่ black-box) พร้อมข้อเสนอแนะเชิงปฏิบัติ</div>
-      <div class="feature"><strong>📤 ส่งออก Excel</strong>รายงานสรุปและ "รายชื่อผู้ป่วยที่มีปัญหา" พร้อมคำแนะนำ ส่งคืนพื้นที่ตรวจสอบได้ทันที</div>
-      <div class="feature"><strong>📖 คู่มือรหัส SMI-V</strong>อ้างอิงรหัส 1B030-1B037 และตาราง Z-code ที่มักลงผิด ในตัวระบบ</div>
-      <div class="feature"><strong>🔐 ระบบผู้ใช้</strong>Login + สิทธิ์ admin/viewer, ล็อกบัญชีอัตโนมัติเมื่อลองรหัสผิดหลายครั้ง</div>
-    </div>
-  </section>
+  <p>
+    <button class="btn" id="exportReportBtn">⬇ ส่งออกรายงาน Excel</button>
+    <button class="btn btn-danger" id="exportIssuesBtn">⬇ ส่งคืนรายชื่อที่มีปัญหา</button>
+  </p>
 
-  <section>
-    <h2>สถานะการตรวจสอบข้อมูล</h2>
-    <p>ทดสอบกับข้อมูลจริง 1,482 แถว (7 อำเภอ จ.มุกดาหาร):</p>
-    <table>
-      <tr><th>รายการตรวจ</th><th>ผล</th></tr>
-      <tr><td>PID ซ้ำ (hoscode+pid)</td><td class="status-ok">ไม่พบ</td></tr>
-      <tr><td>รหัส b03x นอกช่วง 1B030-1B033</td><td class="status-ok">ไม่พบ</td></tr>
-      <tr><td>วันที่ผิดปกติ (เกิดหลังวันรับบริการ, ติดตามก่อนวันแรก)</td><td class="status-ok">ไม่พบ</td></tr>
-      <tr><td>อายุ ณ สิ้นปีงบผิดปกติ</td><td class="status-ok">ไม่พบ</td></tr>
-      <tr><td>ข้อมูลอ้างอิงตำบล/อำเภอไม่ครบ</td><td>พบ 1 ราย (chw_addr/ampur/tambon ว่าง)</td></tr>
-    </table>
-  </section>
-
-  <section>
-    <h2>เริ่มต้นใช้งานจริง (Deploy)</h2>
-    <p>Stack: PHP 8.2 (Apache) + MySQL 8 + PhpSpreadsheet + Docker Compose</p>
-    <pre>git clone https://github.com/thering999/smiv_plus.git
-cd smiv_plus
-cp .env.example .env    # ตั้งรหัสผ่านฐานข้อมูลใหม่
-docker compose up -d --build
-docker compose exec web composer install
-docker compose exec web php bin/create_admin.php admin "รหัสผ่านที่ปลอดภัย"</pre>
-    <p>เปิด <code>http://localhost:8081/</code> (หรือโดเมน/พอร์ตที่ตั้งค่าไว้บนเซิร์ฟเวอร์จริง)</p>
-  </section>
-
-  <section>
-    <h2>สูตรคำนวณหลัก (อ้างอิงเอกสาร HDC Template)</h2>
-    <table>
-      <tr><th>ตัวแปร</th><th>ความหมาย</th></tr>
-      <tr><td>B / C / D</td><td>ผู้ป่วยเก่า / ใหม่ / รวม (D=B+C)</td></tr>
-      <tr><td>H</td><td>ประชากร 15-60 ปี ย้อนหลัง 2 ปี (กรอกเอง)</td></tr>
-      <tr><td>I</td><td>ผู้ป่วยประมาณการณ์ = H × 4.37% × 11.92% (คำนวณอัตโนมัติ)</td></tr>
-      <tr><td>E</td><td>อัตราเข้าถึงบริการ = D/I×100 (เป้า &gt;40%)</td></tr>
-      <tr><td>J,K,L / M,N,O</td><td>ติดตาม 1 ครั้ง / ติดตาม ≥2 ครั้ง และอัตราไม่ก่อซ้ำ</td></tr>
-    </table>
-    <p>"ก่อความรุนแรงซ้ำ" นับจากจำนวนรหัส <code>b03x</code> (1B030-1B033) ที่ถูกลงทะเบียน <strong>มากกว่า 1 ครั้ง</strong> ต่อผู้ป่วย — รายละเอียดเต็มดูที่ <a href="https://github.com/thering999/smiv_plus/blob/main/README.md">README.md</a></p>
-  </section>
-
-  <section>
-    <h2>ข้อจำกัดที่ต้องทราบ</h2>
-    <ul>
-      <li>ยังไม่ตัดผู้เสียชีวิตออกจากตัวนับ (ไม่มีช่องทางเชื่อมฐานข้อมูลกระทรวงมหาดไทย)</li>
-      <li>ข้อมูลประชากร (H) ต้องกรอกเองรายอำเภอ ไม่ได้มาจากไฟล์นำเข้า</li>
-      <li>สรุปด้วย AI ต้องมี Ollama รันอยู่บนเครื่อง/เครือข่ายเดียวกัน</li>
-    </ul>
-  </section>
-
-  <div class="footer-note">
-    Repository: <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a>
+  <div class="chart-grid">
+    <div class="chart-box"><h3>จำนวนผู้ป่วย SMI-V (เก่า/ใหม่)</h3><canvas id="chartPatients"></canvas></div>
+    <div class="chart-box" id="accessChartBox"><h3>อัตราเข้าถึงบริการ (E) เทียบเป้า 40%</h3><canvas id="chartAccess"></canvas></div>
+    <div class="chart-box" id="followSummaryChartBox" hidden><h3>สัดส่วนการติดตาม (รวม)</h3><canvas id="chartFollowSummary"></canvas></div>
+    <div class="chart-box"><h3>อัตราก่อความรุนแรงซ้ำรายพื้นที่</h3><canvas id="chartRepeatRate"></canvas></div>
+    <div class="chart-box"><h3>สัดส่วนการติดตามรายพื้นที่</h3><canvas id="chartFollowByArea"></canvas></div>
+    <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่รายเดือน</h3><canvas id="chartMonthlyTrend"></canvas></div>
+    <div class="chart-box"><h3>สัดส่วนเพศ (ผู้ป่วยสะสมทั้งหมด)</h3><canvas id="chartSex"></canvas></div>
   </div>
+
+  <div id="issueCategoryChartBox" class="chart-box" style="max-width:700px;margin-bottom:24px" hidden>
+    <h3>สรุปปัญหาแยกประเด็น (จำนวนพื้นที่ที่พบ)</h3>
+    <canvas id="chartIssueCategory"></canvas>
+  </div>
+
+  <h2>สรุปปัญหาแยกรายพื้นที่</h2>
+  <div id="findingsList"></div>
+
+  <h2>ตารางแบบเต็ม (รูปแบบ HDC Template) — <span id="tableAreaLabel"></span></h2>
+  <div class="table-scroll">
+  <table class="report-table">
+    <thead>
+      <tr><th rowspan="2">พื้นที่</th><th colspan="3">จำนวนผู้ป่วย SMI-V</th><th rowspan="2">E (%)</th><th rowspan="2">F</th><th rowspan="2">G (%)</th><th rowspan="2">H</th><th rowspan="2">I</th><th colspan="3">ติดตาม 1 ครั้ง</th><th colspan="3">ติดตาม≥2ครั้ง</th><th rowspan="2">ขาดติดตาม</th></tr>
+      <tr><th>B</th><th>C</th><th>D</th><th>J</th><th>K</th><th>L</th><th>M</th><th>N</th><th>O</th></tr>
+    </thead>
+    <tbody id="reportTableBody"></tbody>
+  </table>
+  </div>
+  <p class="note">I = H × 4.37% (ความชุก SMI) × 11.92% (สัดส่วน SMI-V) · "ก่อความรุนแรงซ้ำ" นับจากรหัส b03x (1B030-1B033) ที่ลงทะเบียนมากกว่า 1 ครั้งต่อคน · ตัดผู้ป่วยอายุเกิน 60 ปี ณ สิ้นปีงบออกแล้ว · ยังไม่ตัดผู้เสียชีวิตออก (ไม่มีข้อมูลเชื่อมกระทรวงมหาดไทย)</p>
+</div>
+
+<footer>SMI-V Plus — <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a> · ทำงานทั้งหมดใน browser ไม่มี server/ฐานข้อมูล</footer>
 </main>
+
+<script src="app.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>

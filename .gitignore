@@ -5,3 +5,6 @@ cache/
 src/.phpunit.result.cache
 exchange_file.xlsx
 templete.pdf
+credentials.local.txt
+.playwright-mcp/
+test_upload.xlsx
