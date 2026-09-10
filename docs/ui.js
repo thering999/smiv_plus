@@ -284,6 +284,24 @@ function savePopulationFromForm() {
   renderPopulationEditor();
 }
 
+// ---------- Settings editor ----------
+function renderSettingsEditor() {
+  $('#setPrevalence').value = state.settings.smi_prevalence_pct;
+  $('#setRatio').value = state.settings.smiv_ratio_pct;
+  $('#setMaxAge').value = state.settings.max_age_included;
+  $('#setCurrentFy').value = state.settings.current_fiscal_year_be;
+}
+
+function saveSettingsFromForm() {
+  state.settings.smi_prevalence_pct = Number($('#setPrevalence').value) || 4.37;
+  state.settings.smiv_ratio_pct = Number($('#setRatio').value) || 11.92;
+  state.settings.max_age_included = Number($('#setMaxAge').value) || 60;
+  state.settings.current_fiscal_year_be = Number($('#setCurrentFy').value) || state.settings.current_fiscal_year_be;
+  saveLocal();
+  render();
+  renderPopulationEditor();
+}
+
 // ---------- Excel export (SheetJS) ----------
 function exportReportXlsx() {
   const fy = currentFy(), level = currentLevel();
@@ -359,9 +377,11 @@ function publishData() {
 async function init() {
   const publishedOk = await loadPublished();
   if (!publishedOk) loadLocal();
+  if (state.settings.current_fiscal_year_be) $('#fySelect').value = state.settings.current_fiscal_year_be;
   seedDefaultPopulationNames(currentFy());
   render();
   renderPopulationEditor();
+  renderSettingsEditor();
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
@@ -375,6 +395,8 @@ async function init() {
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#publishBtn').addEventListener('click', publishData);
   $('#togglePopEditor').addEventListener('click', () => { $('#popEditor').hidden = !$('#popEditor').hidden; });
+  $('#toggleSettingsEditor').addEventListener('click', () => { $('#settingsEditor').hidden = !$('#settingsEditor').hidden; });
+  $('#saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
 }
 
 document.addEventListener('DOMContentLoaded', init);
