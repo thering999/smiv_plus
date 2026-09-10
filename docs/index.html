@@ -52,11 +52,15 @@
   <div id="importStatus" class="status"></div>
   <p id="storedFileInfo" class="note" hidden></p>
   <p style="margin-top:14px">
-    <button class="btn" id="publishBtn">📤 เผยแพร่ข้อมูล (สร้าง data.json)</button>
+    <button class="btn" id="publishGithubBtn">🚀 เผยแพร่เข้า GitHub อัตโนมัติ (ทับ data.json ทันที)</button>
+    <button class="btn btn-outline" id="publishBtn">📤 ดาวน์โหลด data.json (ทำเอง)</button>
     <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
     <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
+  </p>
+  <p id="githubPublishStatus" class="status"></p>
+  <p class="note">🚀 = อัปโหลดตรงเข้า GitHub ทันที ไม่ต้องถาม token (ฝังไว้ในโค้ดแล้วตามที่ผู้ดูแลระบบร้องขอ — token เป็น fine-grained scope เฉพาะ repo <code>smiv_plus</code>, สิทธิ์ Contents: Read and write เท่านั้น, หมดอายุอัตโนมัติทุก 90 วัน ต้องสร้างใหม่มาแทนที่เมื่อหมดอายุ)
   </p>
   <div id="publishHelper" class="card" hidden style="background:#e6f4ea;border-color:var(--success);margin-top:10px">
     <strong>ขั้นตอนถัดไป — ทำให้ทุกคนเห็นข้อมูลนี้ (data.json ดาวน์โหลดแล้ว):</strong>
@@ -156,8 +160,29 @@
   <div class="table-scroll">
   <table class="report-table">
     <thead>
-      <tr><th rowspan="2">พื้นที่</th><th colspan="3">จำนวนผู้ป่วย SMI-V</th><th rowspan="2">E (%)</th><th rowspan="2">F</th><th rowspan="2">G (%)</th><th rowspan="2">H</th><th rowspan="2">I</th><th colspan="3">ติดตาม 1 ครั้ง</th><th colspan="3">ติดตาม≥2ครั้ง</th><th rowspan="2">ขาดติดตาม</th></tr>
-      <tr><th>B</th><th>C</th><th>D</th><th>J</th><th>K</th><th>L</th><th>M</th><th>N</th><th>O</th></tr>
+      <tr>
+        <th rowspan="2">พื้นที่</th>
+        <th colspan="3">จำนวนผู้ป่วย SMI-V</th>
+        <th rowspan="2" title="ตัวย่อ HDC: E">อัตราเข้าถึงบริการ<br>(%)</th>
+        <th rowspan="2" title="ตัวย่อ HDC: F">ไม่ก่อซ้ำสะสม<br>(คน)</th>
+        <th rowspan="2" title="ตัวย่อ HDC: G">ต่อเนื่อง+ไม่ก่อซ้ำ<br>(%)</th>
+        <th rowspan="2" title="ตัวย่อ HDC: H">ประชากร 15-60 ปี<br>(คน)</th>
+        <th rowspan="2" title="ตัวย่อ HDC: I">ผู้ป่วยประมาณการณ์<br>(คน)</th>
+        <th colspan="3">ติดตามครบ 1 ครั้ง</th>
+        <th colspan="3">ติดตามครบ ≥2 ครั้ง</th>
+        <th rowspan="2">ไม่เคยถูกติดตามเลย<br>(คน)</th>
+      </tr>
+      <tr>
+        <th title="ตัวย่อ HDC: B">ผู้ป่วยเก่า<br>(คน)</th>
+        <th title="ตัวย่อ HDC: C">ผู้ป่วยใหม่<br>(คน)</th>
+        <th title="ตัวย่อ HDC: D">รวมทั้งหมด<br>(คน)</th>
+        <th title="ตัวย่อ HDC: J">จำนวนคนที่ติดตาม<br>(คน)</th>
+        <th title="ตัวย่อ HDC: K">ไม่ก่อซ้ำ<br>(คน)</th>
+        <th title="ตัวย่อ HDC: L">ไม่ก่อซ้ำ<br>(%)</th>
+        <th title="ตัวย่อ HDC: M">จำนวนคนที่ติดตาม<br>(คน)</th>
+        <th title="ตัวย่อ HDC: N">ไม่ก่อซ้ำ<br>(คน)</th>
+        <th title="ตัวย่อ HDC: O">ไม่ก่อซ้ำ<br>(%)</th>
+      </tr>
     </thead>
     <tbody id="reportTableBody"></tbody>
   </table>

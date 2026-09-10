@@ -428,19 +428,80 @@ function exportIssuesXlsx() {
 }
 
 // ---------- Publish (สร้าง data.json ให้ admin นำไป commit เข้า repo เอง — ไม่ฝัง token ใดๆ) ----------
+function buildPayload() {
+  return { patients: state.patients, population: state.population, settings: state.settings, publishedAt: new Date().toISOString() };
+}
+
 function publishData() {
-  const payload = { patients: state.patients, population: state.population, settings: state.settings, publishedAt: new Date().toISOString() };
+  const payload = buildPayload();
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'data.json';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+  markPublished();
+  const helper = document.getElementById('publishHelper');
+  if (helper) helper.hidden = false;
+}
+
+function markPublished() {
   unpublishedChanges = false;
   const banner = document.getElementById('unpublishedBanner');
   if (banner) banner.hidden = true;
-  const helper = document.getElementById('publishHelper');
-  if (helper) helper.hidden = false;
+}
+
+// ---------- Publish ตรงเข้า GitHub (ทับ docs/data.json ทันที) ----------
+// ⚠️ ตามคำขอผู้ใช้ที่ยืนยันแล้วหลังรับทราบความเสี่ยง: ฝัง token ถาวรในโค้ดนี้ (ไม่ถาม/ไม่หมดอายุเมื่อปิดแท็บ)
+// จำกัดขอบเขตความเสียหายด้วย fine-grained token ที่ scope แค่ repo นี้ repo เดียว + สิทธิ์ Contents:write เท่านั้น
+// (ไม่ใช่ token เข้าถึงทั้งบัญชี) — token หมดอายุตาม expiration ที่ตั้งไว้ตอนสร้าง (90 วัน) ต้องสร้างใหม่แล้วมาแทนที่บรรทัดนี้
+const GH_OWNER = 'thering999';
+const GH_REPO = 'smiv_plus';
+const GH_PATH = 'docs/data.json';
+const GH_EMBEDDED_TOKEN = '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';
+
+function getGithubToken() {
+  return GH_EMBEDDED_TOKEN;
+}
+
+async function publishToGithub() {
+  const statusEl = document.getElementById('githubPublishStatus');
+  const token = getGithubToken();
+
+  statusEl.textContent = 'กำลังอัปโหลดเข้า GitHub...';
+  statusEl.className = 'status';
+  try {
+    const payload = buildPayload();
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+
+    // ต้องมี sha ของไฟล์เดิมถ้ามีอยู่แล้ว ไม่งั้น GitHub API จะปฏิเสธการทับ
+    let sha = null;
+    const getRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+    });
+    if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
+    else if (getRes.status !== 404) throw new Error(`อ่านไฟล์เดิมไม่สำเร็จ (${getRes.status})`);
+
+    const putRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`,
+        content, sha: sha || undefined,
+      }),
+    });
+    if (!putRes.ok) {
+      const err = await putRes.json().catch(() => ({}));
+      throw new Error(err.message || `อัปโหลดไม่สำเร็จ (${putRes.status})`);
+    }
+    markPublished();
+    statusEl.textContent = '✅ เผยแพร่เข้า GitHub สำเร็จ — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที';
+    statusEl.className = 'status ok';
+  } catch (err) {
+    statusEl.textContent = '❌ ล้มเหลว: ' + err.message + ' (เช็คว่า token ยังไม่หมดอายุ/มีสิทธิ์ Contents:write)';
+    statusEl.className = 'status error';
+    sessionStorage.removeItem(GH_TOKEN_KEY);
+  }
 }
 
 function clearAllData() {
@@ -486,6 +547,7 @@ async function init() {
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#publishBtn').addEventListener('click', publishData);
+  $('#publishGithubBtn').addEventListener('click', publishToGithub);
   $('#togglePopEditor').addEventListener('click', () => { $('#popEditor').hidden = !$('#popEditor').hidden; });
   $('#toggleSettingsEditor').addEventListener('click', () => { $('#settingsEditor').hidden = !$('#settingsEditor').hidden; });
   $('#clearDataBtn').addEventListener('click', clearAllData);
