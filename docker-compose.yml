@@ -1,20 +1,19 @@
 services:
   db:
-    image: mysql:8.0
+    image: postgres:16
     container_name: smiv_db
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: smiv_plus
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_DB: smiv_plus
+      POSTGRES_USER: ${MYSQL_USER}
+      POSTGRES_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\""]
+      test: ["CMD-SHELL", "pg_isready -U ${MYSQL_USER} -d smiv_plus"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -30,6 +29,7 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: db
+      DB_PORT: 5432
       DB_NAME: smiv_plus
       DB_USER: ${MYSQL_USER}
       DB_PASS: ${MYSQL_PASSWORD}

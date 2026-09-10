@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: smiv-plus
+    runtime: docker
+    dockerfilePath: ./docker/php/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: smiv-plus-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: smiv-plus-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: smiv-plus-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: smiv-plus-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: smiv-plus-db
+          property: password
+      - key: APP_BASE_PATH
+        value: ""
+
+databases:
+  - name: smiv-plus-db
+    plan: free
+    databaseName: smiv_plus
+    user: smiv_user

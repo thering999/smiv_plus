@@ -17,7 +17,7 @@ if (strlen($password) < 8) {
 
 $stmt = $pdo->prepare(
     'INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,\'admin\')
-     ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), display_name = VALUES(display_name)'
+     ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name'
 );
 $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT), $displayName]);
 

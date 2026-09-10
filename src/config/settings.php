@@ -17,7 +17,7 @@ function fiscal_year_end_date(int $fiscalYearBe): string
 
 function current_fiscal_year_be(PDO $pdo): int
 {
-    $stmt = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = 'current_fiscal_year_be'");
+    $stmt = $pdo->prepare("SELECT value FROM settings WHERE key = 'current_fiscal_year_be'");
     $stmt->execute();
     $v = $stmt->fetchColumn();
     return $v !== false ? (int) $v : fiscal_year_be(date('Y-m-d'));
@@ -25,7 +25,7 @@ function current_fiscal_year_be(PDO $pdo): int
 
 function get_setting(PDO $pdo, string $key, $default = null)
 {
-    $stmt = $pdo->prepare('SELECT `value` FROM settings WHERE `key` = ?');
+    $stmt = $pdo->prepare('SELECT value FROM settings WHERE key = ?');
     $stmt->execute([$key]);
     $v = $stmt->fetchColumn();
     return $v !== false ? $v : $default;
@@ -33,7 +33,7 @@ function get_setting(PDO $pdo, string $key, $default = null)
 
 function set_setting(PDO $pdo, string $key, $value): void
 {
-    $pdo->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)')
+    $pdo->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value')
         ->execute([$key, $value]);
 }
 

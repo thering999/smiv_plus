@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare(
             'INSERT INTO population_estimates (fiscal_year_be, ampur, ampur_name, population_15_60, updated_by)
              VALUES (?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE ampur_name=VALUES(ampur_name), population_15_60=VALUES(population_15_60),
-                updated_by=VALUES(updated_by)'
+             ON CONFLICT (fiscal_year_be, ampur) DO UPDATE SET ampur_name=EXCLUDED.ampur_name, population_15_60=EXCLUDED.population_15_60,
+                updated_by=EXCLUDED.updated_by'
         )->execute([$postFy, $ampur, $ampurName, $pop, $_SESSION['user_id']]);
         $pdo->prepare('INSERT INTO audit_log (user_id, action, detail) VALUES (?, ?, ?)')
             ->execute([$_SESSION['user_id'], 'population_edit', "ปีงบ $postFy อำเภอ $ampur ประชากร=$pop"]);

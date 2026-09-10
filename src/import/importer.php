@@ -102,15 +102,15 @@ function import_smiv_file(PDO $pdo, string $filePath, string $originalName, ?int
                  first_date_serv, date_serv_raw, diagcode_raw, b03x_raw, follow_last, fiscal_year_be,
                  smiv_code_count, has_repeat_violence, age_at_fy_end)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE
-                import_batch_id = VALUES(import_batch_id), hosname = VALUES(hosname), cid = VALUES(cid),
-                name = VALUES(name), lname = VALUES(lname), birth = VALUES(birth), sex = VALUES(sex),
-                chw_addr = VALUES(chw_addr), tambon = VALUES(tambon), ampur = VALUES(ampur),
-                first_date_serv = VALUES(first_date_serv), date_serv_raw = VALUES(date_serv_raw),
-                diagcode_raw = VALUES(diagcode_raw), b03x_raw = VALUES(b03x_raw),
-                follow_last = VALUES(follow_last), fiscal_year_be = VALUES(fiscal_year_be),
-                smiv_code_count = VALUES(smiv_code_count), has_repeat_violence = VALUES(has_repeat_violence),
-                age_at_fy_end = VALUES(age_at_fy_end)'
+             ON CONFLICT (hoscode, pid) DO UPDATE SET
+                import_batch_id = EXCLUDED.import_batch_id, hosname = EXCLUDED.hosname, cid = EXCLUDED.cid,
+                name = EXCLUDED.name, lname = EXCLUDED.lname, birth = EXCLUDED.birth, sex = EXCLUDED.sex,
+                chw_addr = EXCLUDED.chw_addr, tambon = EXCLUDED.tambon, ampur = EXCLUDED.ampur,
+                first_date_serv = EXCLUDED.first_date_serv, date_serv_raw = EXCLUDED.date_serv_raw,
+                diagcode_raw = EXCLUDED.diagcode_raw, b03x_raw = EXCLUDED.b03x_raw,
+                follow_last = EXCLUDED.follow_last, fiscal_year_be = EXCLUDED.fiscal_year_be,
+                smiv_code_count = EXCLUDED.smiv_code_count, has_repeat_violence = EXCLUDED.has_repeat_violence,
+                age_at_fy_end = EXCLUDED.age_at_fy_end'
         );
         $selectPatientId = $pdo->prepare('SELECT id FROM patients WHERE hoscode = ? AND pid = ?');
         $deleteVisits = $pdo->prepare('DELETE FROM patient_visits WHERE patient_id = ?');

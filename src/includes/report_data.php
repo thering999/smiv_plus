@@ -168,7 +168,7 @@ function get_problem_patients(PDO $pdo, int $fy, string $level = 'ampur', string
     $stmt = $pdo->prepare(
         "SELECT p.hoscode, p.hosname, p.pid, p.cid, p.name, p.lname, p.birth, p.sex, p.chw_addr, p.tambon, p.ampur,
                 p.first_date_serv, p.date_serv_raw, p.diagcode_raw, p.b03x_raw, p.follow_last,
-                p.smiv_code_count, p.has_repeat_violence,
+                p.smiv_code_count, p.has_repeat_violence::int AS has_repeat_violence,
                 v.total_visits
          FROM patients p
          JOIN (SELECT patient_id, COUNT(*) total_visits FROM patient_visits GROUP BY patient_id) v ON v.patient_id = p.id
@@ -262,7 +262,7 @@ function build_extra_charts(PDO $pdo, int $fy): array
     $rangeStart = date('Y-m-01', strtotime(($ceYearEnd - 1) . '-10-01'));
     $rangeEnd = date('Y-m-t', strtotime($ceYearEnd . '-09-30'));
     $trendStmt = $pdo->prepare(
-        "SELECT DATE_FORMAT(first_date_serv, '%Y-%m') AS ym, COUNT(*) c
+        "SELECT TO_CHAR(first_date_serv, 'YYYY-MM') AS ym, COUNT(*) c
          FROM patients
          WHERE first_date_serv BETWEEN :start AND :end
          GROUP BY ym ORDER BY ym"
@@ -303,20 +303,20 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
 
     $stmt = $pdo->prepare(
         "SELECT $groupCol AS group_key, $labelCol AS label, $ampurRefCol AS ampur_ref,
-            SUM(p.fiscal_year_be < :fy1) AS b,
-            SUM(p.fiscal_year_be = :fy2) AS c,
+            SUM(CASE WHEN p.fiscal_year_be < :fy1 THEN 1 ELSE 0 END) AS b,
+            SUM(CASE WHEN p.fiscal_year_be = :fy2 THEN 1 ELSE 0 END) AS c,
             COUNT(*) AS d,
-            SUM(NOT p.has_repeat_violence) AS f,
-            SUM(v.total_visits = 2) AS j,
-            SUM(v.total_visits = 2 AND NOT p.has_repeat_violence) AS k,
-            SUM(v.total_visits >= 3) AS m,
-            SUM(v.total_visits >= 3 AND NOT p.has_repeat_violence) AS n,
-            SUM(v.total_visits = 1) AS zero_followup,
-            SUM(p.has_repeat_violence) AS repeat_violence_count,
-            SUM(p.birth IS NULL) AS missing_birth,
-            SUM(p.tambon IS NULL OR p.tambon = '') AS missing_tambon,
-            SUM(p.follow_last IS NULL) AS missing_followup,
-            SUM(p.follow_last IS NOT NULL AND p.follow_last = p.first_date_serv) AS same_day_followup
+            SUM(CASE WHEN NOT p.has_repeat_violence THEN 1 ELSE 0 END) AS f,
+            SUM(CASE WHEN v.total_visits = 2 THEN 1 ELSE 0 END) AS j,
+            SUM(CASE WHEN v.total_visits = 2 AND NOT p.has_repeat_violence THEN 1 ELSE 0 END) AS k,
+            SUM(CASE WHEN v.total_visits >= 3 THEN 1 ELSE 0 END) AS m,
+            SUM(CASE WHEN v.total_visits >= 3 AND NOT p.has_repeat_violence THEN 1 ELSE 0 END) AS n,
+            SUM(CASE WHEN v.total_visits = 1 THEN 1 ELSE 0 END) AS zero_followup,
+            SUM(CASE WHEN p.has_repeat_violence THEN 1 ELSE 0 END) AS repeat_violence_count,
+            SUM(CASE WHEN p.birth IS NULL THEN 1 ELSE 0 END) AS missing_birth,
+            SUM(CASE WHEN p.tambon IS NULL OR p.tambon = '' THEN 1 ELSE 0 END) AS missing_tambon,
+            SUM(CASE WHEN p.follow_last IS NULL THEN 1 ELSE 0 END) AS missing_followup,
+            SUM(CASE WHEN p.follow_last IS NOT NULL AND p.follow_last = p.first_date_serv THEN 1 ELSE 0 END) AS same_day_followup
          FROM patients p
          JOIN (
             SELECT patient_id, COUNT(*) total_visits
