@@ -18,7 +18,35 @@ docker compose exec web php bin/create_admin.php admin "รหัสผ่าน
 
 เปิด http://localhost:8081/
 
-## เปิดออกอินเทอร์เน็ต (Cloudflare Tunnel)
+## Deploy ออนไลน์แบบไม่ต้องเปิดเครื่องตัวเองทิ้งไว้ (Railway)
+
+[Railway](https://railway.app) รองรับ Docker + MySQL ตรงกับ stack นี้พอดี ไม่ต้อง rewrite โค้ด มี free trial ให้ทดลองก่อนจ่ายจริง
+
+1. Push โค้ดขึ้น GitHub ให้เสร็จก่อน (ดูหัวข้อ git push ใน CLAUDE session หรือใช้คำสั่งปกติ)
+2. ไป https://railway.app → New Project → **Deploy from GitHub repo** → เลือก `thering999/smiv_plus`
+   Railway จะเจอ `railway.json` ที่กำหนด Dockerfile ไว้ที่ `docker/php/Dockerfile` อัตโนมัติ
+3. ในโปรเจกต์เดียวกัน กด **+ New → Database → Add MySQL** (Railway จะสร้าง service MySQL แยกให้)
+4. ไปที่ service ของเว็บ (smiv_plus) → tab **Variables** → เพิ่ม:
+   ```
+   DB_HOST=${{MySQL.MYSQLHOST}}
+   DB_NAME=${{MySQL.MYSQLDATABASE}}
+   DB_USER=${{MySQL.MYSQLUSER}}
+   DB_PASS=${{MySQL.MYSQLPASSWORD}}
+   APP_BASE_PATH=
+   ```
+   (Railway จะ resolve ตัวแปรจาก service MySQL ให้อัตโนมัติ ไม่ต้อง copy ค่าเอง)
+5. Import schema: เปิด service MySQL → tab **Data/Query** → วางเนื้อหาไฟล์ `db/schema.sql` รันครั้งเดียว
+6. สร้าง admin คนแรก: ติดตั้ง [Railway CLI](https://docs.railway.app/guides/cli) แล้วรัน
+   ```bash
+   railway login
+   railway link          # เลือกโปรเจกต์ smiv_plus
+   railway run php bin/create_admin.php admin "รหัสผ่านที่ปลอดภัย"
+   ```
+7. Railway จะสร้างโดเมน `https://smiv-plus-xxxx.up.railway.app` ให้อัตโนมัติ (Settings → Networking → Generate Domain) พร้อม HTTPS ใช้งานได้ทันที ไม่ต้องเปิดเครื่องตัวเองทิ้งไว้เลย
+
+หมายเหตุ: ขั้นตอน login GitHub/Railway ต้องทำในเบราว์เซอร์ของคุณเอง (เป็น OAuth แบบ interactive) — Claude ทำแทนไม่ได้
+
+## เปิดออกอินเทอร์เน็ตแบบพึ่งเครื่องตัวเอง (Cloudflare Tunnel)
 
 Stack เป็น PHP+MySQL รันบน Cloudflare Pages/Workers ตรงๆ ไม่ได้ (Workers รองรับแค่ JS/TS, DB เป็น D1/SQLite) — ใช้ **Cloudflare Tunnel** แทน: เปิดเครื่อง/เซิร์ฟเวอร์ที่รัน Docker นี้ออกอินเทอร์เน็ตผ่าน Cloudflare โดยไม่ต้องเปิดพอร์ต ไม่ต้อง rewrite โค้ด
 

@@ -12,3 +12,9 @@ COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY docker/php/alias.conf /etc/apache2/conf-enabled/alias.conf
 
 WORKDIR /var/www/html
+
+# ฝัง source + ติดตั้ง dependency ไว้ใน image เอง (สำหรับ deploy บน platform ที่ไม่มี bind mount เช่น Railway/Render)
+# ตอน dev ในเครื่อง docker-compose.yml จะ bind mount ./src ทับ path นี้อีกที ไม่กระทบกัน
+COPY src/ /var/www/html/
+RUN composer install --no-dev --optimize-autoloader --no-interaction \
+    && chown -R www-data:www-data /var/www/html

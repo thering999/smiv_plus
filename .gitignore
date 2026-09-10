@@ -1,6 +1,5 @@
 .env
 src/vendor/
-src/composer.lock
 cache/
 *.png
 src/.phpunit.result.cache
