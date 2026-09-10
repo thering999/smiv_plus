@@ -2,7 +2,8 @@
 'use strict';
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
-  FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct } = window.smivEngine;
+  FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 const $ = sel => document.querySelector(sel);
@@ -131,7 +132,19 @@ function render() {
   renderTable(shownReport, shownTotals, level);
   renderFindings(report, level);
   renderCharts(report, totals, level, hasPopulationData);
+  renderQualityScore(shownTotals);
   saveLocal();
+}
+
+// ---------- คะแนนประเมินผล (6 Building Blocks) ตามเอกสารกรมสุขภาพจิต ----------
+function renderQualityScore(totals) {
+  const q = qualityLevelAccess(totals.e);
+  const score6 = scoreQuantitative(totals.g, SCORE_SCALE_6M);
+  const score10 = scoreQuantitative(totals.g, SCORE_SCALE_10M);
+  $('#qualityLevel').textContent = q.label;
+  $('#qualityRange').textContent = `คะแนน ${q.scoreRange}`;
+  $('#score6m').textContent = `${score6}/10`;
+  $('#score10m').textContent = `${score10}/10`;
 }
 
 function renderTable(report, totals, level) {

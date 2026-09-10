@@ -7,6 +7,27 @@ const REPORT_LEVELS = { ampur: 'รายอำเภอ', hoscode: 'ราย�
 const KNOWN_AMPUR = { '01':'เมืองมุกดาหาร','02':'นิคมคำสร้อย','03':'ดอนตาล','04':'ดงหลวง','05':'คำชะอี','06':'หว้านใหญ่','07':'หนองสูง' };
 const TARGET_ACCESS_RATE = 40, THRESHOLD_REPEAT_VIOLENCE = 15, THRESHOLD_ZERO_FOLLOWUP = 30;
 
+// เกณฑ์เชิงคุณภาพ (6 Building Blocks) ด้านผลกระทบ "การเข้าถึงบริการ" — จากสไลด์กรมสุขภาพจิต
+// ระดับ 1-2 เป็นขั้นตอนกระบวนการ (ออกแบบ Template / ขึ้น Dashboard กระทรวง) ไม่ผูกกับ % จึงไม่ประเมินระดับ 1-2 ที่นี่
+function qualityLevelAccess(ePct) {
+  if (ePct >= 40) return { level: 5, scoreRange: '86-100', label: 'ระดับ 5 (ผ่านเกณฑ์ >40%)' };
+  if (ePct >= 35) return { level: 4, scoreRange: '71-85', label: 'ระดับ 4 (>35%)' };
+  if (ePct >= 30) return { level: 3, scoreRange: '56-70', label: 'ระดับ 3 (>30%)' };
+  return { level: null, scoreRange: '0-55', label: 'ต่ำกว่าระดับ 3 (<30%) — ยังอยู่ขั้นตอนกระบวนการ (ระดับ 1-2)' };
+}
+
+// คะแนนเชิงปริมาณ (1-10) ของตัวชี้วัด G (เข้าถึงบริการต่อเนื่องไม่ก่อซ้ำ) ตามรอบประเมิน 6 เดือน / 10 เดือน
+const SCORE_SCALE_6M = { 2:1, 4:2, 6:3, 8:4, 10:5, 12:6, 14:7, 16:8, 18:9, 20:10 };
+const SCORE_SCALE_10M = { 22:1, 24:2, 26:3, 28:4, 30:5, 32:6, 34:7, 36:8, 38:9, 40:10 };
+
+function scoreQuantitative(gPct, scale) {
+  let best = 0;
+  for (const [threshold, score] of Object.entries(scale)) {
+    if (gPct >= Number(threshold)) best = score;
+  }
+  return best;
+}
+
 const state = {
   patients: [],       // แถวดิบหลัง parse+คำนวณ
   population: {},      // { fyBe: { ampurCode: {name, pop15_60} } }
@@ -287,6 +308,7 @@ window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M,
 };
 
 })();

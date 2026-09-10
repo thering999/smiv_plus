@@ -7,6 +7,10 @@ header.topbar .brand{font-weight:600;font-size:1.05em}
 .nav-btn{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;padding:8px 14px;border-radius:4px;cursor:pointer;font-size:.9em}
 .nav-btn:hover{background:rgba(255,255,255,.15)}
 .nav-btn.active{background:#fff;color:var(--primary);font-weight:600}
+.gate-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#2c6e91,#1a4a63);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.gate-box{background:#fff;padding:28px;border-radius:8px;max-width:380px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+.gate-box h2{margin:0 0 8px;text-align:center}
+.gate-box input{width:100%;padding:10px;border:1px solid var(--border);border-radius:4px;margin-top:10px}
 main{padding:20px;max-width:1400px;margin:0 auto}
 h1{font-size:1.4em}
 h2{color:var(--primary);border-bottom:2px solid var(--border);padding-bottom:6px;margin-top:32px}

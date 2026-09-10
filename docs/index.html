@@ -3,12 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>SMI-V Plus</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 </head>
 <body>
+<div id="gateOverlay" class="gate-overlay">
+  <div class="gate-box">
+    <h2>🧠 SMI-V Plus</h2>
+    <p class="note">ระบบนี้ไม่เปิดเผยต่อสาธารณะทั่วไป — กรุณาใส่รหัสผ่านที่ได้รับจากผู้ดูแลระบบ</p>
+    <input type="password" id="gatePass" placeholder="รหัสผ่าน">
+    <button class="btn" id="gateBtn" style="width:100%;margin-top:8px">เข้าใช้งาน</button>
+    <p id="gateError" class="status error" style="display:none">รหัสผ่านไม่ถูกต้อง</p>
+    <p class="note" style="margin-top:16px">⚠️ หมายเหตุ: ด่านนี้กันคนทั่วไปที่บังเอิญเจอลิงก์เท่านั้น <strong>ไม่ใช่ระบบความปลอดภัยจริง</strong> เพราะเป็นเว็บ static ไม่มี server ตรวจสอบ — ใครเปิด view-source ก็เห็นรหัสและข้อมูลได้ ไม่ควรใช้เก็บข้อมูลที่ต้องปกปิดจริงจัง</p>
+  </div>
+</div>
 <header class="topbar">
   <div class="brand">🧠 SMI-V Plus — ระบบรายงาน SMI-V เขตสุขภาพ (static, ไม่มี server)</div>
   <nav class="nav">
@@ -78,6 +89,16 @@
     <div class="kpi-card"><div class="kpi-label">ร้อยละต่อเนื่องไม่ก่อซ้ำ (G)</div><div class="kpi-value" id="kpiG">0%</div><div class="kpi-target" id="kpiGsub"></div></div>
     <div class="kpi-card"><div class="kpi-label">ขาดการติดตาม</div><div class="kpi-value" id="kpiMissing">0</div><div class="kpi-target">ไม่เคยได้รับรหัส 1B037</div></div>
     <div class="kpi-card"><div class="kpi-label" id="kpiAreaLabel">พื้นที่</div><div class="kpi-value" id="kpiArea">0</div></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;border:none;font-size:1.05em">คะแนนประเมินผล (6 Building Blocks — กรมสุขภาพจิต)</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">ระดับคุณภาพ (ด้านการเข้าถึงบริการ)</div><div class="kpi-value" id="qualityLevel" style="font-size:1.1em">-</div><div class="kpi-target" id="qualityRange"></div></div>
+      <div class="kpi-card"><div class="kpi-label">คะแนนเชิงปริมาณ (รอบ 6 เดือน)</div><div class="kpi-value" id="score6m">-</div><div class="kpi-target">จากตัวชี้วัด G</div></div>
+      <div class="kpi-card"><div class="kpi-label">คะแนนเชิงปริมาณ (รอบ 10 เดือน)</div><div class="kpi-value" id="score10m">-</div><div class="kpi-target">จากตัวชี้วัด G</div></div>
+    </div>
+    <p class="note">อิงตัวเลขของมุมมอง/พื้นที่ที่เลือกอยู่ด้านบน — ระดับ 1-2 เป็นขั้นตอนกระบวนการ (ไม่ผูกกับ %) จึงไม่ประเมินที่นี่</p>
   </div>
 
   <p>
@@ -203,6 +224,25 @@ function showTab(tab) {
   document.getElementById('navDashboard').classList.toggle('active', tab === 'dashboard');
   document.getElementById('navReference').classList.toggle('active', tab === 'reference');
 }
+
+// ด่านกันคนทั่วไป (obscurity เท่านั้น ไม่ใช่ security จริง — รหัสนี้อ่านได้จาก view-source เสมอ)
+// เปลี่ยนรหัสผ่านได้ที่บรรทัดถัดไป แล้ว publish ใหม่
+const GATE_PASSPHRASE = 'มุกดาหาร2569';
+(function () {
+  const overlay = document.getElementById('gateOverlay');
+  if (sessionStorage.getItem('smiv_gate_ok') === '1') { overlay.style.display = 'none'; return; }
+  function tryUnlock() {
+    const val = document.getElementById('gatePass').value;
+    if (val === GATE_PASSPHRASE) {
+      sessionStorage.setItem('smiv_gate_ok', '1');
+      overlay.style.display = 'none';
+    } else {
+      document.getElementById('gateError').style.display = 'block';
+    }
+  }
+  document.getElementById('gateBtn').addEventListener('click', tryUnlock);
+  document.getElementById('gatePass').addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+})();
 </script>
 <script src="app.js"></script>
 <script src="ui.js"></script>
