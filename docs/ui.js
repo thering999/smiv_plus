@@ -316,8 +316,8 @@ function saveSettingsFromForm() {
 }
 
 // ---------- Excel export (SheetJS) ----------
-function exportReportXlsx() {
-  const fy = currentFy(), level = currentLevel();
+function exportReportXlsx(levelOverride) {
+  const fy = currentFy(), level = levelOverride || currentLevel();
   const { report, totals } = buildReport(fy, level, $('#dateFrom').value || null, $('#dateTo').value || null);
   const areaLabel = REPORT_LEVELS[level];
   const header = [`รายงาน SMI-V ปีงบประมาณ ${fy} — ${areaLabel}`];
@@ -403,7 +403,10 @@ async function init() {
   $('#dateFrom').addEventListener('change', render);
   $('#dateTo').addEventListener('change', render);
   $('#clearDates').addEventListener('click', () => { $('#dateFrom').value = ''; $('#dateTo').value = ''; render(); });
-  $('#exportReportBtn').addEventListener('click', exportReportXlsx);
+  $('#exportReportBtn').addEventListener('click', () => exportReportXlsx());
+  $('#exportReportAmpurBtn').addEventListener('click', () => exportReportXlsx('ampur'));
+  $('#exportReportHoscodeBtn').addEventListener('click', () => exportReportXlsx('hoscode'));
+  $('#exportReportChwBtn').addEventListener('click', () => exportReportXlsx('chw_addr'));
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#publishBtn').addEventListener('click', publishData);
