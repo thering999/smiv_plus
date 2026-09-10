@@ -3,6 +3,10 @@
 body{margin:0;font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text)}
 header.topbar{display:flex;align-items:center;justify-content:space-between;background:var(--primary);color:#fff;padding:14px 20px;flex-wrap:wrap;gap:10px}
 header.topbar .brand{font-weight:600;font-size:1.05em}
+.nav{display:flex;gap:6px}
+.nav-btn{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;padding:8px 14px;border-radius:4px;cursor:pointer;font-size:.9em}
+.nav-btn:hover{background:rgba(255,255,255,.15)}
+.nav-btn.active{background:#fff;color:var(--primary);font-weight:600}
 main{padding:20px;max-width:1400px;margin:0 auto}
 h1{font-size:1.4em}
 h2{color:var(--primary);border-bottom:2px solid var(--border);padding-bottom:6px;margin-top:32px}
