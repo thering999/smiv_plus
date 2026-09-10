@@ -17,7 +17,6 @@
     <input type="password" id="gatePass" placeholder="รหัสผ่าน">
     <button class="btn" id="gateBtn" style="width:100%;margin-top:8px">เข้าใช้งาน</button>
     <p id="gateError" class="status error" style="display:none">รหัสผ่านไม่ถูกต้อง</p>
-    <p class="note" style="margin-top:16px">⚠️ หมายเหตุ: ด่านนี้กันคนทั่วไปที่บังเอิญเจอลิงก์เท่านั้น <strong>ไม่ใช่ระบบความปลอดภัยจริง</strong> เพราะเป็นเว็บ static ไม่มี server ตรวจสอบ — ใครเปิด view-source ก็เห็นรหัสและข้อมูลได้ ไม่ควรใช้เก็บข้อมูลที่ต้องปกปิดจริงจัง</p>
   </div>
 </div>
 <header class="topbar">
@@ -229,22 +228,60 @@ function showTab(tab) {
   document.getElementById('navReference').classList.toggle('active', tab === 'reference');
 }
 
-// ด่านกันคนทั่วไป (obscurity เท่านั้น ไม่ใช่ security จริง — รหัสนี้อ่านได้จาก view-source เสมอ)
+// ด่านกันคนทั่วไป (obscurity เท่านั้น ไม่ใช่ security จริง — รหัสนี้อ่านได้จาก view-source เสมอ
+// คนที่เปิด dev tools ข้ามได้ทั้งด่านและ throttle นี้ — เป็นแค่กันคนกดมั่วธรรมดา)
 // เปลี่ยนรหัสผ่านได้ที่บรรทัดถัดไป แล้ว publish ใหม่
 const GATE_PASSPHRASE = 'smiv49000muk';
+const GATE_MAX_ATTEMPTS = 5;
+const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 (function () {
   const overlay = document.getElementById('gateOverlay');
+  const btn = document.getElementById('gateBtn');
+  const errEl = document.getElementById('gateError');
   if (sessionStorage.getItem('smiv_gate_ok') === '1') { overlay.style.display = 'none'; return; }
+
+  function getAttempts() {
+    try { return JSON.parse(localStorage.getItem('smiv_gate_attempts') || '{"count":0,"lockedUntil":0}'); }
+    catch (e) { return { count: 0, lockedUntil: 0 }; }
+  }
+  function setAttempts(a) { try { localStorage.setItem('smiv_gate_attempts', JSON.stringify(a)); } catch (e) {} }
+
+  function updateLockUi() {
+    const a = getAttempts();
+    const remain = a.lockedUntil - Date.now();
+    if (remain > 0) {
+      btn.disabled = true;
+      const mins = Math.ceil(remain / 60000);
+      errEl.textContent = `ลองผิดหลายครั้งเกินไป กรุณารออีกประมาณ ${mins} นาที`;
+      errEl.style.display = 'block';
+      setTimeout(updateLockUi, 10000);
+    } else {
+      btn.disabled = false;
+    }
+  }
+  updateLockUi();
+
   function tryUnlock() {
+    const a = getAttempts();
+    if (a.lockedUntil > Date.now()) { updateLockUi(); return; }
     const val = document.getElementById('gatePass').value;
     if (val === GATE_PASSPHRASE) {
+      setAttempts({ count: 0, lockedUntil: 0 });
       sessionStorage.setItem('smiv_gate_ok', '1');
       overlay.style.display = 'none';
     } else {
-      document.getElementById('gateError').style.display = 'block';
+      const count = a.count + 1;
+      const lockedUntil = count >= GATE_MAX_ATTEMPTS ? Date.now() + GATE_LOCKOUT_MS : 0;
+      setAttempts({ count: lockedUntil ? 0 : count, lockedUntil });
+      if (lockedUntil) {
+        updateLockUi();
+      } else {
+        errEl.textContent = `รหัสผ่านไม่ถูกต้อง (เหลือ ${GATE_MAX_ATTEMPTS - count} ครั้งก่อนถูกล็อกชั่วคราว)`;
+        errEl.style.display = 'block';
+      }
     }
   }
-  document.getElementById('gateBtn').addEventListener('click', tryUnlock);
+  btn.addEventListener('click', tryUnlock);
   document.getElementById('gatePass').addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
 })();
 </script>
