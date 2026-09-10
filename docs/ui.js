@@ -100,8 +100,9 @@ async function handleUpload(file) {
     saveLocal();
     saveRawFile(file);
     markDirty();
-    setStatus(`นำเข้าสำเร็จ ${patients.length} แถว (รวมทั้งหมด ${state.patients.length} คน)`, 'ok');
+    setStatus(`นำเข้าสำเร็จ ${patients.length} แถว (รวมทั้งหมด ${state.patients.length} คน) — กำลังเผยแพร่...`, 'ok');
     render();
+    await publishToGithub();
   } catch (err) {
     setStatus('นำเข้าล้มเหลว: ' + err.message, 'error');
   }
