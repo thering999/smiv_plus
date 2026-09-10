@@ -18,6 +18,26 @@ docker compose exec web php bin/create_admin.php admin "รหัสผ่าน
 
 เปิด http://localhost:8081/
 
+## เปิดออกอินเทอร์เน็ต (Cloudflare Tunnel)
+
+Stack เป็น PHP+MySQL รันบน Cloudflare Pages/Workers ตรงๆ ไม่ได้ (Workers รองรับแค่ JS/TS, DB เป็น D1/SQLite) — ใช้ **Cloudflare Tunnel** แทน: เปิดเครื่อง/เซิร์ฟเวอร์ที่รัน Docker นี้ออกอินเทอร์เน็ตผ่าน Cloudflare โดยไม่ต้องเปิดพอร์ต ไม่ต้อง rewrite โค้ด
+
+1. ไป https://one.dash.cloudflare.com/ → **Networks → Tunnels → Create a tunnel** → เลือก Cloudflared → ตั้งชื่อ
+2. หน้าถัดไปจะให้ **token** (สตริงยาว) — copy เก็บไว้ (**ห้ามแชร์ที่ไหนแบบเปิดเผย** เทียบเท่ารหัสผ่าน)
+3. ใส่ token ในไฟล์ `.env`:
+   ```
+   CLOUDFLARE_TUNNEL_TOKEN=<token ที่ copy มา>
+   ```
+4. ตั้ง **Public Hostname** ในหน้า dashboard เดียวกัน: Service type = `HTTP`, URL = `web:80` (ชื่อ service ในเครือข่าย Docker ภายใน ไม่ใช่ localhost)
+5. รัน tunnel:
+   ```bash
+   docker compose --profile cloudflare up -d
+   ```
+6. เข้าผ่านโดเมนที่ตั้งไว้ (เช่น `smiv.yourdomain.com`) ได้ทันที มี HTTPS ให้อัตโนมัติ
+
+**หมายเหตุ**: เครื่องที่รัน Docker ต้องเปิดทิ้งไว้ตลอดเวลาที่ต้องการให้เว็บออนไลน์ (Cloudflare Tunnel เป็นแค่ทางเชื่อม ไม่ใช่ hosting) — ถ้าต้องการ uptime 24 ชม. จริงจัง ควรย้าย Docker ไปรันบน VPS แทน
+ถ้าโดเมนของ Public Hostname เป็น subdomain เฉพาะของระบบนี้ (ไม่ได้แชร์กับแอปอื่น) แนะนำตั้ง `APP_BASE_PATH=` (ว่าง) ใน docker-compose.yml แทน `/smiv_plus` เพื่อให้ URL สะอาดขึ้น
+
 ## นำเข้าข้อมูล
 
 เมนู "ผู้ดูแลระบบ → นำเข้า Excel" อัปโหลดไฟล์ .xlsx ที่มีชีตชื่อ `Data` หัวคอลัมน์:

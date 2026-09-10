@@ -39,5 +39,16 @@ services:
     volumes:
       - ./src:/var/www/html
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: smiv_cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - web
+    profiles: ["cloudflare"]
+
 volumes:
   db_data:
