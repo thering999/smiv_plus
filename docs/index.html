@@ -48,6 +48,7 @@
 <p class="note">อัปโหลดไฟล์ Excel แล้วทุกคนจะเห็นข้อมูลใหม่ทันทีอัตโนมัติ — ไม่ต้องกดอะไรเพิ่ม</p>
 
 <div id="unpublishedBanner" class="alert" hidden>⚠️ มีข้อมูลที่ยังไม่ได้เผยแพร่ — ถ้าปิดหน้านี้ไปคนอื่นจะยังไม่เห็นข้อมูลล่าสุด กด "🚀 เผยแพร่ข้อมูล" ด้านล่าง</div>
+<div id="execSummaryPrint" hidden></div>
 <div id="historyViewBanner" class="alert" hidden style="background:#eaf1f5;color:var(--primary-dark);border-color:var(--primary)">
   <span></span> — <a href="#" id="exitHistoryViewBtn">กลับสู่ข้อมูลล่าสุด</a>
 </div>
@@ -65,6 +66,7 @@
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
     <button class="btn btn-outline" id="toggleHistoryPanel">📜 ประวัติการนำเข้า</button>
     <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
+    <button class="btn btn-outline" id="printExecSummaryBtn">🖨️ พิมพ์สรุปผู้บริหาร (1 หน้า)</button>
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
   <p id="githubPublishStatus" class="status"></p>
@@ -104,7 +106,7 @@
 </div>
 
 <form class="filter-bar card" onsubmit="return false">
-  <div><label>ปีงบประมาณ (พ.ศ.)</label><input type="number" id="fySelect" value="2569" min="2560" max="2600"></div>
+  <div><label>ปีงบประมาณ (พ.ศ.)</label><select id="fySelect"><option value="2569">2569</option></select></div>
   <div><label>มุมมอง</label>
     <select id="levelSelect">
       <option value="ampur">รายอำเภอ</option>
@@ -473,7 +475,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260911c"></script>
-<script src="ui.js?v=20260911c"></script>
+<script src="app.js?v=20260911d"></script>
+<script src="ui.js?v=20260911d"></script>
 </body>
 </html>

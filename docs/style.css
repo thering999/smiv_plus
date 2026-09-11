@@ -95,6 +95,14 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
   .gate-box{padding:20px}
 }
 
+body.printing-exec-summary > *:not(#execSummaryPrint){display:none !important}
+body.printing-exec-summary #execSummaryPrint{display:block !important}
+#execSummaryPrint h1{font-size:1.3em;margin-bottom:4px}
+#execSummaryPrint .exec-kpi-row{display:flex;gap:14px;margin:14px 0;flex-wrap:wrap}
+#execSummaryPrint .exec-kpi{border:1px solid var(--border);border-radius:8px;padding:10px 16px;min-width:130px}
+#execSummaryPrint .exec-kpi .label{font-size:.8em;color:#6b7280}
+#execSummaryPrint .exec-kpi .value{font-size:1.6em;font-weight:700}
+
 @media print{
   @page{margin:12mm}
   header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,#lowEAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
