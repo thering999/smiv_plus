@@ -122,9 +122,15 @@ function renderStoredFileInfo() {
 // ---------- Upload ----------
 async function handleUpload(file) {
   if (viewingHistory) { await exitHistoryView(); }
-  setStatus('กำลังอ่านไฟล์...', '');
+  const fileInput = $('#xlsxFile');
+  fileInput.disabled = true;
+  const sizeKb = (file.size / 1024).toFixed(0);
+  setStatus(`กำลังอ่านไฟล์... (${file.name}, ${sizeKb} KB) — ไฟล์ใหญ่อาจใช้เวลาสักครู่ อย่าปิดหน้านี้`, '');
   try {
     const wb = await readWorkbook(file);
+    setStatus(`กำลังตรวจสอบข้อมูล... (${file.name}, ${sizeKb} KB)`, '');
+    // ให้ browser วาดข้อความสถานะก่อนเริ่มประมวลผลหนัก (validateAndParse เป็น sync loop อาจค้างจอถ้าไม่ยก frame ให้ก่อน)
+    await new Promise(r => setTimeout(r, 0));
     const patients = validateAndParse(wb);
 
     // เช็คแถวซ้ำ PID ภายในไฟล์เดียวกัน (ไม่ใช่การ upsert ปกติ แต่ไฟล์เองมีแถวซ้ำ — เสี่ยงข้อมูลผิด)
@@ -138,7 +144,7 @@ async function handleUpload(file) {
     if (dupInFile.length) {
       const preview = dupInFile.slice(0, 10).join(', ') + (dupInFile.length > 10 ? ` และอีก ${dupInFile.length - 10} รายการ` : '');
       const ok = confirm(`⚠️ พบ PID ซ้ำกัน ${dupInFile.length} รายการภายในไฟล์นี้เอง (จะเก็บเฉพาะแถวสุดท้ายของแต่ละ PID):\n\n${preview}\n\nต้องการนำเข้าต่อหรือไม่?`);
-      if (!ok) { setStatus('ยกเลิกการนำเข้า — ตรวจสอบไฟล์ก่อน', 'error'); return; }
+      if (!ok) { setStatus('ยกเลิกการนำเข้า — ตรวจสอบไฟล์ก่อน', 'error'); fileInput.disabled = false; return; }
     }
 
     // upsert by hoscode+pid
@@ -154,6 +160,9 @@ async function handleUpload(file) {
     await publishToGithub();
   } catch (err) {
     setStatus('นำเข้าล้มเหลว: ' + err.message, 'error');
+  } finally {
+    fileInput.disabled = false;
+    fileInput.value = '';
   }
 }
 
@@ -465,6 +474,11 @@ async function exportTableAsImage(tableSelector, filename) {
   const btn = $('#exportMainTableImgBtn');
   const originalText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = 'กำลังสร้างภาพ...'; btn.disabled = true; }
+  // ตารางอยู่ใน .table-scroll ที่ overflow-x:auto — capture ตรงๆ จะเห็นแค่ส่วนที่เลื่อนเข้ามาในจอ
+  // เปิด overflow ชั่วคราวให้เห็นทุกคอลัมน์เต็มความกว้างจริงก่อน capture แล้วค่อยคืนค่าเดิม
+  const scrollBox = el.closest('.table-scroll');
+  const prevOverflow = scrollBox ? scrollBox.style.overflow : null;
+  if (scrollBox) scrollBox.style.overflow = 'visible';
   try {
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
     canvas.toBlob(blob => {
@@ -478,6 +492,7 @@ async function exportTableAsImage(tableSelector, filename) {
   } catch (err) {
     alert('สร้างภาพไม่สำเร็จ: ' + err.message);
   } finally {
+    if (scrollBox) scrollBox.style.overflow = prevOverflow;
     if (btn) { btn.textContent = originalText; btn.disabled = false; }
   }
 }
@@ -1082,6 +1097,8 @@ async function publishToGithub() {
   statusEl.textContent = 'กำลังเผยแพร่...';
   statusEl.className = 'status';
   publishInFlight = true;
+  const publishBtns = [$('#publishGithubBtn'), $('#publishBtn')].filter(Boolean);
+  publishBtns.forEach(b => b.disabled = true);
   const payload = buildPayload();
   try {
     let result, res;
@@ -1121,6 +1138,7 @@ async function publishToGithub() {
     statusEl.className = 'status error';
   } finally {
     publishInFlight = false;
+    publishBtns.forEach(b => b.disabled = false);
   }
 }
 
@@ -1164,8 +1182,14 @@ async function loadHistoryList() {
   }
 }
 
+function setHistoryButtonsDisabled(disabled) {
+  const box = document.getElementById('historyList');
+  if (box) box.querySelectorAll('button').forEach(b => b.disabled = disabled);
+}
+
 async function deleteHistorySnapshot(file) {
   if (!confirm(`ลบรายการประวัตินี้ถาวร? (ไฟล์ไม่สามารถกู้คืนได้อีก)\n${file}`)) return;
+  setHistoryButtonsDisabled(true);
   try {
     const res = await fetch(PUBLISH_WORKER_URL, {
       method: 'POST',
@@ -1177,10 +1201,12 @@ async function deleteHistorySnapshot(file) {
     loadHistoryList();
   } catch (e) {
     alert('ลบไม่สำเร็จ: ' + e.message);
+    setHistoryButtonsDisabled(false);
   }
 }
 
 async function loadHistorySnapshot(file) {
+  setHistoryButtonsDisabled(true);
   try {
     const res = await fetch('./' + file.replace(/^docs\//, ''), { cache: 'no-store' });
     if (!res.ok) throw new Error('อ่านไฟล์ไม่สำเร็จ (' + res.status + ')');
@@ -1197,11 +1223,13 @@ async function loadHistorySnapshot(file) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
     alert('โหลดข้อมูลย้อนหลังไม่สำเร็จ: ' + e.message);
+    setHistoryButtonsDisabled(false);
   }
 }
 
 async function restoreHistorySnapshot(file) {
   if (!confirm('กู้คืนข้อมูลจากประวัตินี้ให้กลายเป็นข้อมูลปัจจุบัน (ทับข้อมูลล่าสุดที่ทุกคนเห็นอยู่ตอนนี้)?\nไม่สามารถยกเลิกภายหลังได้ (แต่จะถูกบันทึกเป็นประวัติใหม่ กู้คืนย้อนกลับได้อีกถ้าจำเป็น)')) return;
+  setHistoryButtonsDisabled(true);
   try {
     const res = await fetch('./' + file.replace(/^docs\//, ''), { cache: 'no-store' });
     if (!res.ok) throw new Error('อ่านไฟล์ไม่สำเร็จ (' + res.status + ')');
@@ -1219,6 +1247,7 @@ async function restoreHistorySnapshot(file) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
     alert('กู้คืนไม่สำเร็จ: ' + e.message);
+    setHistoryButtonsDisabled(false);
   }
 }
 
