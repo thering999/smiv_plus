@@ -118,6 +118,9 @@
 
 <div id="dashboard" hidden>
   <div id="popWarning" class="alert" hidden>ยังไม่มีข้อมูลประชากร 15-60 ปี (H) — อัตราเข้าถึงบริการ (E) จะเป็น 0 จนกว่าจะกรอกที่ปุ่ม "ประชากร/ประมาณการณ์"</div>
+  <div id="riskAlertBanner" class="alert" hidden style="background:#fdecea;border-color:#f5c6cb;cursor:pointer">
+    🔴 <strong id="riskAlertText"></strong> — คลิกเพื่อดูรายชื่อ
+  </div>
 
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">อัตราเข้าถึงบริการ (E)</div><div class="kpi-value" id="kpiAccess">0%</div><div class="kpi-target">เป้า &gt; 40%</div></div>
