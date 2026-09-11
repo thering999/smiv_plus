@@ -24,11 +24,23 @@ function loadUi() {
     removeItem(k) { delete this._data[k]; },
   };
 
+  // XLSX stub: จับ aoa (array-of-arrays) ที่ exportReportXlsx/exportIssuesXlsx ส่งเข้ามาจริง
+  // เพื่อทดสอบว่าจำนวนคอลัมน์ของ header กับแต่ละแถวข้อมูลตรงกันเสมอ (บั๊กที่เคยเกิดจริงในโปรเจกต์นี้)
+  const xlsxStub = {
+    lastAoa: null,
+    utils: {
+      aoa_to_sheet(aoa) { xlsxStub.lastAoa = aoa; return {}; },
+      book_new() { return {}; },
+      book_append_sheet() {},
+    },
+    writeFile() {},
+  };
+
   const windowStub = { addEventListener() {}, removeEventListener() {} };
   const sandbox = {
     window: windowStub, document: documentStub, localStorage: localStorageStub, sessionStorage: localStorageStub,
     navigator: { serviceWorker: undefined }, location: { search: '', pathname: '/', origin: '' },
-    console, Notification: undefined, URLSearchParams, history: { replaceState() {} },
+    console, Notification: undefined, URLSearchParams, history: { replaceState() {} }, XLSX: xlsxStub,
   };
   vm.createContext(sandbox);
   new vm.Script(appSrc, { filename: 'app.js' }).runInContext(sandbox);
