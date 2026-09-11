@@ -176,6 +176,14 @@ function populateAreaSelect(report) {
 }
 
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// ---------- ลิงก์ mailto สำหรับส่งอีเมลแจ้งเตือน (เปิด mail client ของเครื่อง ไม่ต้องมี service ภายนอก) ----------
+function setMailtoLink(sel, subject, body) {
+  const el = $(sel);
+  if (!el) return;
+  const fullBody = `${body}\n\nดูรายละเอียดที่: ${location.origin + location.pathname}\n\n(ส่งจากระบบ SMI-V Plus อัตโนมัติ)`;
+  el.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
+}
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
 
 // ---------- Render ----------
@@ -325,7 +333,9 @@ function checkLowAccessRatePersistence(ePct, hasPopulationData) {
   const days = Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
   if (days >= LOW_E_THRESHOLD_DAYS) {
     banner.hidden = false;
-    $('#lowEAlertText').textContent = `อัตราเข้าถึงบริการ (E) ต่ำกว่าเป้า 40% ต่อเนื่องมา ${days} วัน (ปัจจุบัน ${ePct.toFixed(2)}%)`;
+    const msg = `อัตราเข้าถึงบริการ (E) ต่ำกว่าเป้า 40% ต่อเนื่องมา ${days} วัน (ปัจจุบัน ${ePct.toFixed(2)}%)`;
+    $('#lowEAlertText').textContent = msg;
+    setMailtoLink('#lowEAlertEmailLink', 'SMI-V Plus: แจ้งเตือนอัตราเข้าถึงบริการต่ำต่อเนื่อง', msg);
     if (!lowENotified && notificationSupported() && Notification.permission === 'granted') {
       new Notification('SMI-V Plus — อัตราเข้าถึงบริการต่ำต่อเนื่อง', {
         body: `E ต่ำกว่าเป้า 40% มา ${days} วันแล้ว (ปัจจุบัน ${ePct.toFixed(2)}%)`,
@@ -471,12 +481,21 @@ function addChartDownloadButton(canvas) {
   btn.textContent = '⬇ ภาพ';
   btn.title = 'ดาวน์โหลดกราฟนี้เป็นรูปภาพ (PNG)';
   btn.addEventListener('click', e => {
+    e.preventDefault();
     e.stopPropagation();
-    const title = box.querySelector('h3')?.textContent.trim().replace(/[\\/:*?"<>|]/g, '') || canvas.id;
-    const url = canvas.toDataURL('image/png', 1.0);
-    const a = document.createElement('a');
-    a.href = url; a.download = `smiv_${title}.png`;
-    document.body.appendChild(a); a.click(); a.remove();
+    try {
+      const title = box.querySelector('h3')?.textContent.trim().replace(/[\\/:*?"<>|]/g, '') || canvas.id;
+      canvas.toBlob(blob => {
+        if (!blob) { alert('สร้างภาพไม่สำเร็จ ลองใหม่อีกครั้ง'); return; }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `smiv_${title}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }, 'image/png');
+    } catch (err) {
+      alert('ดาวน์โหลดภาพไม่สำเร็จ: ' + err.message);
+    }
   });
   box.appendChild(btn);
 }
@@ -592,7 +611,7 @@ function renderCharts(report, totals, level, hasPop) {
 }
 
 // ---------- สรุปผู้บริหาร 1 หน้า สำหรับพิมพ์ ----------
-function printExecutiveSummary() {
+function buildExecSummaryContent() {
   const fy = currentFy();
   const { totals } = buildReport(fy, 'ampur', null, null);
   const problemRows = buildProblemPatients(fy, 'ampur', '');
@@ -617,10 +636,45 @@ function printExecutiveSummary() {
       <tbody>${topAreas.map(r => `<tr><td>${escapeHtml(r.ampur_name)}</td><td>${fmt(r.repeat_violence_count)}</td><td>${pct(r.repeat_violence_count, r.d).toFixed(1)}%</td></tr>`).join('')}</tbody>
     </table>
     <p class="note" style="margin-top:16px">รายงานฉบับเต็มดูได้ที่: ${location.origin + location.pathname}</p>`;
+  return fy;
+}
 
+function printExecutiveSummary() {
+  buildExecSummaryContent();
+  const content = $('#execSummaryPrint');
   document.body.classList.add('printing-exec-summary');
   content.hidden = false;
   window.print();
+}
+
+async function downloadExecSummaryPdf() {
+  const btn = $('#downloadPdfBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'กำลังสร้าง PDF...';
+  btn.disabled = true;
+  try {
+    const fy = buildExecSummaryContent();
+    const content = $('#execSummaryPrint');
+    content.hidden = false;
+    content.style.cssText = 'position:fixed;left:-9999px;top:0;width:760px;background:#fff;padding:24px';
+
+    const canvas = await html2canvas(content, { scale: 2, backgroundColor: '#ffffff' });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const imgWidth = pageWidth - 40;
+    const imgHeight = canvas.height * (imgWidth / canvas.width);
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 20, 20, imgWidth, imgHeight);
+    pdf.save(`smiv_summary_${fy}.pdf`);
+
+    content.hidden = true;
+    content.style.cssText = '';
+  } catch (err) {
+    alert('สร้าง PDF ไม่สำเร็จ: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 window.addEventListener('afterprint', () => {
@@ -798,7 +852,9 @@ function renderProblemPatients(fy, level, areaFilter) {
   const alertBanner = $('#riskAlertBanner');
   if (priorityCount['สูง'] > 0) {
     alertBanner.hidden = false;
-    $('#riskAlertText').textContent = `พบผู้ป่วยความสำคัญสูง (ก่อความรุนแรงซ้ำ) ${priorityCount['สูง'].toLocaleString('th-TH')} คน ต้องติดตามด่วน`;
+    const msg = `พบผู้ป่วยความสำคัญสูง (ก่อความรุนแรงซ้ำ) ${priorityCount['สูง'].toLocaleString('th-TH')} คน ต้องติดตามด่วน`;
+    $('#riskAlertText').textContent = msg;
+    setMailtoLink('#riskAlertEmailLink', 'SMI-V Plus: แจ้งเตือนผู้ป่วยความสำคัญสูง', msg);
   } else {
     alertBanner.hidden = true;
   }
@@ -1157,6 +1213,7 @@ async function init() {
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
   $('#printExecSummaryBtn').addEventListener('click', printExecutiveSummary);
+  $('#downloadPdfBtn').addEventListener('click', downloadExecSummaryPdf);
   $('#levelSelect').addEventListener('change', render);
   $('#mainTableSearch').addEventListener('input', e => { mainTableSearch = e.target.value; render(); });
   $$('table.report-table thead th[data-sort-key]').forEach(th => {
@@ -1191,7 +1248,8 @@ async function init() {
     if (!panel.hidden) loadHistoryList();
   });
   $('#exitHistoryViewBtn').addEventListener('click', e => { e.preventDefault(); exitHistoryView(); });
-  $('#riskAlertBanner').addEventListener('click', () => {
+  $('#riskAlertViewLink').addEventListener('click', e => {
+    e.preventDefault();
     $('#problemPatientsBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   updateNotifyButton();
