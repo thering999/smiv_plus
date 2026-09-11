@@ -153,7 +153,9 @@ function currentLevel() { return $('#levelSelect').value || 'ampur'; }
 
 function populateAreaSelect(report) {
   const sel = $('#areaSelect');
-  const current = sel.value;
+  const pendingUrlArea = sel.dataset.pendingUrlArea;
+  const current = pendingUrlArea || sel.value;
+  delete sel.dataset.pendingUrlArea;
   sel.innerHTML = '<option value="">— ทั้งหมด —</option>' + report.map(r => `<option value="${r.group_key}">${escapeHtml(r.ampur_name)} (D=${r.d})</option>`).join('');
   sel.value = current && report.some(r => String(r.group_key) === current) ? current : '';
 }
@@ -211,7 +213,91 @@ function render() {
   renderCharts(report, totals, level, hasPopulationData);
   renderQualityScore(shownTotals);
   renderProblemPatients(fy, level, areaFilter);
+  renderDataQualitySummary(report);
+  renderYearComparison(fy);
+  syncUrlFromControls(fy, level, areaFilter);
   saveLocal();
+}
+
+// ---------- สรุปคุณภาพข้อมูลรวมทั้งจังหวัด ----------
+function renderDataQualitySummary(report) {
+  const box = $('#dataQualityBox');
+  const content = $('#dataQualityContent');
+  if (!box || !content) return;
+  const totalD = report.reduce((s, r) => s + r.d, 0);
+  if (!totalD) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const sums = { missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0, zero_followup: 0, repeat_violence_count: 0 };
+  for (const r of report) for (const k of Object.keys(sums)) sums[k] += r[k] || 0;
+
+  const items = [
+    { label: 'ไม่มีวันเกิด', value: sums.missing_birth },
+    { label: 'ไม่มีตำบล', value: sums.missing_tambon },
+    { label: 'ไม่เคยได้รับรหัส 1B037 (ขาดการติดตาม)', value: sums.missing_followup },
+    { label: 'สงสัยลงรหัสผิด (ติดตามวันเดียวกับวันแรก)', value: sums.same_day_followup },
+    { label: 'ไม่เคยติดตามซ้ำเลย', value: sums.zero_followup },
+    { label: 'ก่อความรุนแรงซ้ำ', value: sums.repeat_violence_count },
+  ].sort((a, b) => b.value - a.value);
+
+  content.innerHTML = `
+    <table class="report-table" style="max-width:600px">
+      <thead><tr><th>ปัญหาคุณภาพข้อมูล</th><th>จำนวน (คน)</th><th>% ของทั้งหมด</th></tr></thead>
+      <tbody>${items.map(it => `
+        <tr><td style="text-align:left">${escapeHtml(it.label)}</td><td>${fmt(it.value)}</td><td>${pct(it.value, totalD).toFixed(1)}%</td></tr>
+      `).join('')}</tbody>
+    </table>`;
+}
+
+// ---------- เทียบปีงบปัจจุบันกับปีก่อนหน้า ----------
+function renderYearComparison(fy) {
+  const box = $('#yearComparisonBox');
+  const content = $('#yearComparisonContent');
+  if (!box || !content) return;
+  const prevFy = fy - 1;
+  const hasPrevData = state.patients.some(p => p.fiscal_year_be <= prevFy);
+  if (!hasPrevData) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const curr = buildReport(fy, 'ampur', null, null).totals;
+  const prev = buildReport(prevFy, 'ampur', null, null).totals;
+  const diff = (a, b, isPct) => {
+    const d = a - b;
+    const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '—';
+    const cls = d > 0 ? 'kpi-ok' : d < 0 ? 'kpi-danger' : '';
+    const valStr = isPct ? Math.abs(d).toFixed(2) : Math.abs(d).toLocaleString('th-TH');
+    return `<span class="${cls}" style="font-weight:600">${arrow} ${valStr}</span>`;
+  };
+  content.innerHTML = `
+    <table class="report-table" style="max-width:600px">
+      <thead><tr><th>ตัวชี้วัด</th><th>ปีงบ ${prevFy}</th><th>ปีงบ ${fy}</th><th>เปลี่ยนแปลง</th></tr></thead>
+      <tbody>
+        <tr><td>ผู้ป่วยสะสม (D)</td><td>${fmt(prev.d)}</td><td>${fmt(curr.d)}</td><td>${diff(curr.d, prev.d, false)}</td></tr>
+        <tr><td>อัตราเข้าถึงบริการ E (%)</td><td>${prev.e.toFixed(2)}</td><td>${curr.e.toFixed(2)}</td><td>${diff(curr.e, prev.e, true)}</td></tr>
+        <tr><td>ต่อเนื่องไม่ก่อซ้ำ G (%)</td><td>${prev.g.toFixed(2)}</td><td>${curr.g.toFixed(2)}</td><td>${diff(curr.g, prev.g, true)}</td></tr>
+      </tbody>
+    </table>`;
+}
+
+// ---------- URL แชร์มุมมองได้ (?fy=..&level=..&area=..) ----------
+function syncUrlFromControls(fy, level, area) {
+  const params = new URLSearchParams();
+  params.set('fy', fy);
+  if (level !== 'ampur') params.set('level', level);
+  if (area) params.set('area', area);
+  const qs = params.toString();
+  const newUrl = location.pathname + (qs ? '?' + qs : '');
+  if (newUrl !== location.pathname + location.search) history.replaceState(null, '', newUrl);
+}
+
+function applyUrlToControls() {
+  const params = new URLSearchParams(location.search);
+  const fy = params.get('fy');
+  const level = params.get('level');
+  const area = params.get('area');
+  if (fy) $('#fySelect').value = fy;
+  if (level) $('#levelSelect').value = level;
+  if (area) $('#areaSelect').dataset.pendingUrlArea = area;
 }
 
 // ---------- คะแนนประเมินผล (6 Building Blocks) ตามเอกสารกรมสุขภาพจิต ----------
@@ -913,6 +999,7 @@ async function init() {
   const publishedOk = await loadPublished();
   if (!publishedOk) loadLocal();
   if (state.settings.current_fiscal_year_be) $('#fySelect').value = state.settings.current_fiscal_year_be;
+  applyUrlToControls();
   seedDefaultPopulationNames(currentFy());
   render();
   renderPopulationEditor();
@@ -921,6 +1008,23 @@ async function init() {
 
   window.addEventListener('beforeunload', e => {
     if (unpublishedChanges) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // คีย์ลัด: / โฟกัสช่องค้นหา, Esc ปิด panel ที่เปิดอยู่
+  window.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    if (e.key === '/' && !typing) {
+      e.preventDefault();
+      const target = $('#ppSearchInput') || $('#mainTableSearch');
+      if (target) target.focus();
+    } else if (e.key === 'Escape') {
+      if (typing) document.activeElement.blur();
+      ['#popEditor', '#settingsEditor', '#historyPanel'].forEach(sel => {
+        const el = $(sel);
+        if (el && !el.hidden) el.hidden = true;
+      });
+    }
   });
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
