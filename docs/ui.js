@@ -473,7 +473,7 @@ async function ghGetFile(path, token) {
     headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
   });
   if (res.status === 404) return { sha: null, json: null };
-  if (!res.ok) throw new Error(`อ่านไฟล์ ${path} ไม่สำเร็จ (${res.status})`);
+  if (!res.ok) { const e = new Error(`อ่านไฟล์ ${path} ไม่สำเร็จ (${res.status})`); e.status = res.status; throw e; }
   const j = await res.json();
   const text = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))));
   return { sha: j.sha, json: JSON.parse(text) };
@@ -488,7 +488,9 @@ async function ghPutFile(path, obj, sha, token, message) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `บันทึก ${path} ไม่สำเร็จ (${res.status})`);
+    const e = new Error(err.message || `บันทึก ${path} ไม่สำเร็จ (${res.status})`);
+    e.status = res.status;
+    throw e;
   }
 }
 
@@ -531,9 +533,12 @@ async function publishToGithub() {
     statusEl.textContent = '✅ เผยแพร่เข้า GitHub สำเร็จ (บันทึกประวัติด้วย) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที';
     statusEl.className = 'status ok';
   } catch (err) {
-    statusEl.textContent = '❌ ล้มเหลว: ' + err.message + ' (เช็คว่า token ยังไม่หมดอายุ/มีสิทธิ์ Contents:write)';
+    const isAuthError = err.status === 401 || err.status === 403;
+    statusEl.textContent = '❌ ล้มเหลว: ' + err.message + (isAuthError
+      ? ' — token ไม่ถูกต้อง/หมดอายุ/ไม่มีสิทธิ์ ต้องใส่ใหม่ครั้งถัดไป'
+      : ' (ลองกดเผยแพร่ใหม่อีกครั้ง — token ยังใช้ได้อยู่)');
     statusEl.className = 'status error';
-    localStorage.removeItem(GH_TOKEN_KEY);
+    if (isAuthError) localStorage.removeItem(GH_TOKEN_KEY);
   }
 }
 
