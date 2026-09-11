@@ -38,10 +38,13 @@ function json(obj, status = 200) {
 
 async function ghGetFile(path, token) {
   const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'smiv-plus-worker' },
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'smiv-plus-worker', 'X-GitHub-Api-Version': '2022-11-28' },
   });
   if (res.status === 404) return { sha: null, json: null };
-  if (!res.ok) throw new Error(`read ${path} failed (${res.status})`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`read ${path} failed (${res.status}): ${body.slice(0, 300)}`);
+  }
   const j = await res.json();
   const text = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))));
   return { sha: j.sha, json: JSON.parse(text) };
@@ -51,7 +54,7 @@ async function ghPutFile(path, obj, sha, token, message) {
   const content = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
   const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
     method: 'PUT',
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'smiv-plus-worker' },
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'smiv-plus-worker', 'X-GitHub-Api-Version': '2022-11-28' },
     body: JSON.stringify({ message, content, sha: sha || undefined }),
   });
   if (!res.ok) {
@@ -65,13 +68,14 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() });
     }
-    if (request.method !== 'POST') {
-      return json({ error: 'method not allowed' }, 405);
-    }
 
     const siteKey = request.headers.get('X-Site-Key') || '';
     if (!env.SITE_KEY || siteKey !== env.SITE_KEY) {
       return json({ error: 'unauthorized' }, 401);
+    }
+
+    if (request.method !== 'POST') {
+      return json({ error: 'method not allowed' }, 405);
     }
 
     let payload;
