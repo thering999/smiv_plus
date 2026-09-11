@@ -448,6 +448,15 @@ function renderProblemPatients(fy, level, areaFilter) {
 
   const priorityCount = { 'สูง': 0, 'กลาง': 0, 'ปกติ': 0 };
   for (const r of rows) priorityCount[r.priority]++;
+
+  const alertBanner = $('#riskAlertBanner');
+  if (priorityCount['สูง'] > 0) {
+    alertBanner.hidden = false;
+    $('#riskAlertText').textContent = `พบผู้ป่วยความสำคัญสูง (ก่อความรุนแรงซ้ำ) ${priorityCount['สูง'].toLocaleString('th-TH')} คน ต้องติดตามด่วน`;
+  } else {
+    alertBanner.hidden = true;
+  }
+
   drawChart('chartProblemPriority', {
     type: 'doughnut',
     data: { labels: ['สูง (ก่อความรุนแรงซ้ำ)', 'กลาง (หลายปัญหา/ค้างนาน)', 'ปกติ'], datasets: [{ data: [priorityCount['สูง'], priorityCount['กลาง'], priorityCount['ปกติ']], backgroundColor: ['#c0392b', '#e0a63c', '#9aa5ad'] }] },
@@ -698,6 +707,9 @@ async function init() {
     if (!panel.hidden) loadHistoryList();
   });
   $('#exitHistoryViewBtn').addEventListener('click', e => { e.preventDefault(); exitHistoryView(); });
+  $('#riskAlertBanner').addEventListener('click', () => {
+    $('#problemPatientsBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
