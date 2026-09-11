@@ -59,7 +59,35 @@ async function ghPutFile(path, obj, sha, token, message) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `write ${path} failed (${res.status})`);
+    const e = new Error(err.message || `write ${path} failed (${res.status})`);
+    e.status = res.status;
+    throw e;
+  }
+}
+
+// เขียนไฟล์แบบ retry เอง 1 ครั้งถ้าชน sha conflict (409) — เกิดได้เวลามีคนกด publish ซ้อนกันเป๊ะๆ
+async function ghGetThenPut(path, obj, token, message) {
+  const cur = await ghGetFile(path, token);
+  try {
+    await ghPutFile(path, obj, cur.sha, token, message);
+  } catch (err) {
+    if (err.status !== 409) throw err;
+    const fresh = await ghGetFile(path, token);
+    await ghPutFile(path, obj, fresh.sha, token, message);
+  }
+}
+
+// อ่าน-แก้-เขียน index ประวัติ พร้อม retry เต็มรูปแบบถ้าชน conflict (อ่านใหม่+append ใหม่ ไม่ใช่แค่เขียนซ้ำ)
+async function updateHistoryIndex(entry, token, attempt = 0) {
+  const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
+  let list = Array.isArray(idx.json) ? idx.json : [];
+  list.push(entry);
+  if (list.length > GH_HISTORY_KEEP) list = list.slice(list.length - GH_HISTORY_KEEP);
+  try {
+    await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `update history index (${list.length} รายการ)`);
+  } catch (err) {
+    if (err.status === 409 && attempt < 2) return updateHistoryIndex(entry, token, attempt + 1);
+    throw err;
   }
 }
 
@@ -94,21 +122,16 @@ export default {
     try {
       const messageBase = `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`;
 
-      const main = await ghGetFile(GH_PATH, token);
-      await ghPutFile(GH_PATH, payload, main.sha, token, messageBase);
+      await ghGetThenPut(GH_PATH, payload, token, messageBase);
 
       const snapshotPath = `docs/history/${String(payload.publishedAt).replace(/[:.]/g, '-')}.json`;
-      const snap = await ghGetFile(snapshotPath, token);
-      await ghPutFile(snapshotPath, payload, snap.sha, token, `history snapshot — ${messageBase}`);
+      await ghGetThenPut(snapshotPath, payload, token, `history snapshot — ${messageBase}`);
 
-      const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
-      let list = Array.isArray(idx.json) ? idx.json : [];
-      list.push({
+      const newEntry = {
         file: snapshotPath, publishedAt: payload.publishedAt,
         patientCount: payload.patients.length, fiscalYear: (payload.settings && payload.settings.current_fiscal_year_be) || null,
-      });
-      if (list.length > GH_HISTORY_KEEP) list = list.slice(list.length - GH_HISTORY_KEEP);
-      await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `update history index (${list.length} รายการ)`);
+      };
+      await updateHistoryIndex(newEntry, token);
 
       return json({ ok: true, patientCount: payload.patients.length });
     } catch (err) {
