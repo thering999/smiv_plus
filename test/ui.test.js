@@ -48,6 +48,33 @@ test('buildProblemPatients: เรียงลำดับ สูง มาก�
   assert.equal(rows[0].priority, 'สูง');
 });
 
+test('checkLowAccessRatePersistence: E >= 40% ต้องลบสถานะเตือนและซ่อน banner', () => {
+  sandbox.localStorage.setItem('smivplus_low_e_since', new Date(Date.now() - 40 * 86400000).toISOString());
+  sandbox.checkLowAccessRatePersistence(45, true);
+  assert.equal(sandbox.localStorage.getItem('smivplus_low_e_since'), null);
+});
+
+test('checkLowAccessRatePersistence: E ต่ำกว่าเป้าแต่เพิ่งเริ่ม (<30 วัน) ยังไม่ต้องขึ้นเตือน', () => {
+  sandbox.localStorage.setItem('smivplus_low_e_since', new Date(Date.now() - 5 * 86400000).toISOString());
+  const banner = sandbox.document.querySelector('#lowEAlertBanner');
+  sandbox.checkLowAccessRatePersistence(20, true);
+  assert.equal(banner.hidden, true);
+});
+
+test('checkLowAccessRatePersistence: E ต่ำกว่าเป้าต่อเนื่องเกิน 30 วัน ต้องขึ้นเตือน', () => {
+  sandbox.localStorage.setItem('smivplus_low_e_since', new Date(Date.now() - 31 * 86400000).toISOString());
+  const banner = sandbox.document.querySelector('#lowEAlertBanner');
+  sandbox.checkLowAccessRatePersistence(20, true);
+  assert.equal(banner.hidden, false);
+});
+
+test('checkLowAccessRatePersistence: ไม่มีข้อมูลประชากร ต้องไม่ขึ้นเตือน (E คำนวณไม่ได้จริง ไม่ใช่ E ต่ำจริง)', () => {
+  sandbox.localStorage.setItem('smivplus_low_e_since', new Date(Date.now() - 31 * 86400000).toISOString());
+  const banner = sandbox.document.querySelector('#lowEAlertBanner');
+  sandbox.checkLowAccessRatePersistence(0, false);
+  assert.equal(banner.hidden, true);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',

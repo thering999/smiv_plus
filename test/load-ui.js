@@ -10,7 +10,7 @@ function loadUi() {
 
   const noopEl = { addEventListener() {}, classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, style: {}, hidden: true, textContent: '', innerHTML: '', value: '' };
   const documentStub = {
-    querySelector: () => null,
+    querySelector: () => noopEl,
     querySelectorAll: () => [],
     getElementById: () => noopEl,
     addEventListener: () => {},
