@@ -397,6 +397,7 @@ function savePopulationFromForm() {
   markDirty();
   render();
   renderPopulationEditor();
+  publishToGithub();
 }
 
 // ---------- Settings editor ----------
@@ -416,6 +417,7 @@ function saveSettingsFromForm() {
   markDirty();
   render();
   renderPopulationEditor();
+  publishToGithub();
 }
 
 // ---------- Excel export (SheetJS) ----------
