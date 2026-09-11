@@ -83,6 +83,7 @@
       <tbody id="popTableBody"></tbody>
     </table>
     <button class="btn" id="savePopBtn" style="margin-top:10px">บันทึกประชากร</button>
+    <button class="btn btn-outline" id="copyPopPrevYearBtn" hidden style="margin-top:10px"></button>
   </div>
   <div id="settingsEditor" hidden style="margin-top:14px;max-width:400px">
     <p class="note">ค่าคงที่ตามสูตร HDC — ปรับได้หากกรมสุขภาพจิตประกาศตัวเลขใหม่</p>
@@ -160,6 +161,7 @@
     <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่ข้ามปีงบ (ทุกข้อมูลที่มี)</h3><canvas id="chartYearlyTrend"></canvas></div>
     <div class="chart-box"><h3>สัดส่วนเพศ (ผู้ป่วยสะสมทั้งหมด)</h3><canvas id="chartSex"></canvas></div>
     <div class="chart-box"><h3>ระดับความสำคัญผู้ป่วยที่ต้องติดตาม</h3><canvas id="chartProblemPriority"></canvas></div>
+    <div class="chart-box" id="accessTrendChartBox" hidden><h3>แนวโน้มอัตราเข้าถึงบริการ (E) ย้อนหลัง เทียบเป้า 40%</h3><canvas id="chartAccessTrend"></canvas></div>
     <div class="chart-box" style="grid-column:1/-1"><h3>แนวโน้มผู้ป่วยใหม่รายอำเภอ ข้ามปีงบ</h3><canvas id="chartYearlyTrendByAmpur"></canvas></div>
   </div>
 

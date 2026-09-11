@@ -331,6 +331,22 @@ function buildYearlyTrend() {
   return { years, newPatients: years.map(y => counts[y]) };
 }
 
+// แนวโน้มอัตราเข้าถึงบริการ (E) ย้อนหลังตามปีงบ — เฉพาะปีที่มีข้อมูลประชากรกรอกไว้แล้วเท่านั้น
+function buildAccessRateTrend() {
+  const maxAge = state.settings.max_age_included;
+  const fyList = Object.keys(state.population)
+    .map(Number)
+    .filter(fy => Object.values(state.population[fy]).some(r => r.pop15_60 > 0))
+    .sort((a, b) => a - b);
+
+  const ePctByYear = fyList.map(fy => {
+    const d = state.patients.filter(p => p.fiscal_year_be <= fy && (p.age_at_fy_end === null || p.age_at_fy_end <= maxAge)).length;
+    const iTotal = Object.values(state.population[fy]).reduce((sum, r) => sum + estimateSmivPatients(r.pop15_60), 0);
+    return iTotal > 0 ? pct(d, iTotal) : 0;
+  });
+  return { years: fyList, ePct: ePctByYear };
+}
+
 // เทรนด์รายปีงบ แยกตามอำเภอ (เฉพาะ 7 อำเภอหลักในพื้นที่ + "อื่นๆ" รวมนอกพื้นที่)
 function buildYearlyTrendByAmpur() {
   const byAmpur = {};
@@ -363,7 +379,7 @@ window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur,
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
 };
 
 })();
