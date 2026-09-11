@@ -134,6 +134,31 @@ test('countFindingsByCategory: นับพื้นที่ที่พบป�
   assert.equal(counts.ok, undefined); // ok ไม่อยู่ใน FINDING_CATEGORY_LABELS จึงไม่ถูกนับ
 });
 
+test('buildAccessRateTrend: แสดงเฉพาะปีที่มีข้อมูลประชากรกรอกไว้แล้ว (ปีที่ไม่มีต้องไม่โผล่)', () => {
+  engine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  engine.state.population = {
+    2568: { '01': { name: 'A', pop15_60: 50000 } },
+    2569: {}, // ปีนี้ยังไม่มีค่า H>0 เลย ต้องไม่โผล่ในผล
+  };
+  engine.state.patients = [mkPatient({ ampur: '01', fiscal_year_be: 2568, pid: '1' })];
+  const trend = engine.buildAccessRateTrend();
+  assert.equal(JSON.stringify(trend.years), JSON.stringify([2568]));
+  assert.equal(trend.ePct.length, 1);
+});
+
+test('buildYearlyTrendByAmpur: แยกยอดผู้ป่วยใหม่ตามอำเภอต่อปีงบ ถูกต้อง และอำเภอนอกพื้นที่ลงกลุ่ม "อื่นๆ"', () => {
+  engine.state.patients = [
+    mkPatient({ ampur: '01', fiscal_year_be: 2568, pid: '1' }),
+    mkPatient({ ampur: '01', fiscal_year_be: 2568, pid: '2' }),
+    mkPatient({ ampur: '99', fiscal_year_be: 2568, pid: '3' }), // ไม่ใช่ 1 ใน 7 อำเภอหลัก -> "other"
+  ];
+  const trend = engine.buildYearlyTrendByAmpur();
+  const ampur01 = trend.series.find(s => s.key === '01');
+  const other = trend.series.find(s => s.key === 'other');
+  assert.equal(ampur01.data[trend.years.indexOf(2568)], 2);
+  assert.equal(other.data[trend.years.indexOf(2568)], 1);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
