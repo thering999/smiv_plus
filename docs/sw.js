@@ -1,6 +1,6 @@
 // SMI-V Plus — service worker เก็บแคชไว้ดูออฟไลน์ได้ (bump CACHE_VERSION ทุกครั้งที่แก้ไฟล์หลัก)
-const CACHE_VERSION = 'smiv-plus-v20260911k';
-const APP_SHELL = ['./', './index.html', './style.css?v=20260911k', './app.js?v=20260911k', './ui.js?v=20260911k', './manifest.json'];
+const CACHE_VERSION = 'smiv-plus-v20260911l';
+const APP_SHELL = ['./', './index.html', './style.css?v=20260911l', './app.js?v=20260911l', './ui.js?v=20260911l', './manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL)));
