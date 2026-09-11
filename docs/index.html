@@ -286,6 +286,43 @@
 <div class="card" style="background:#eaf1f5">
   <strong>สรุปสำหรับผู้ดูแลระบบ:</strong> ถ้าอัตราเข้าถึงบริการ (E) ในหน้า Dashboard ต่ำผิดปกติ ให้ตรวจสอบกับทีม HIS ของ รพ.สต./รพ. ว่ามีการลงรหัส Z-code แทน 1B03x ตามตารางข้างต้นหรือไม่ ก่อนสรุปว่าผู้ป่วยเข้าไม่ถึงบริการจริง
 </div>
+
+<h2>5. สูตรคำนวณตัวชี้วัด (ตามเอกสาร Template ตัวชี้วัด กรมสุขภาพจิต)</h2>
+<div class="table-scroll">
+<table class="report-table">
+  <thead><tr><th>ตัวชี้วัด</th><th>สูตร</th><th>ความหมาย</th></tr></thead>
+  <tbody>
+    <tr><td>อัตราเข้าถึงบริการ (E)</td><td>(D / I) × 100</td><td>D = ผู้ป่วย SMI-V สะสมที่เข้าถึงบริการ (ลงทะเบียน HDC แล้ว) · I = ผู้ป่วย SMI-V ประมาณการณ์ในพื้นที่ (อายุ 15-60 ปี) · เป้าหมาย &gt; 40%</td></tr>
+    <tr><td>ร้อยละต่อเนื่อง+ไม่ก่อซ้ำ ติดตาม 1 ครั้ง (L)</td><td>(K / I) × 100</td><td>K = ผู้ป่วยที่ติดตามครบ 1 ครั้ง และไม่ก่อความรุนแรงซ้ำ</td></tr>
+    <tr><td>ร้อยละต่อเนื่อง+ไม่ก่อซ้ำ ติดตาม ≥2 ครั้ง (O)</td><td>(N / I) × 100</td><td>N = ผู้ป่วยที่ติดตามครบ ≥2 ครั้ง และไม่ก่อความรุนแรงซ้ำ</td></tr>
+    <tr><td>ผู้ป่วยประมาณการณ์ (I)</td><td>H × 4.37% × 11.92%</td><td>H = ประชากรอายุ 15-60 ปีของพื้นที่ · 4.37% = ความชุก SMI รวม · 11.92% = สัดส่วน SMI-V ในผู้ป่วย SMI</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">รอบคำนวณตามเอกสารต้นทาง: ประมวลผลทุก 15 วัน/30 วัน และตรวจสอบสถานะข้อมูลทุก 3 เดือน — smiv_plus คำนวณแบบ real-time ทุกครั้งที่เปิดหน้าเว็บ (เข้มกว่ารอบมาตรฐาน HDC)</p>
+
+<h2>6. ความชุกโรค SMI แยกตามกลุ่มโรค (ปี พ.ศ. 2566)</h2>
+<div class="table-scroll">
+<table class="report-table">
+  <thead><tr><th>กลุ่มโรค</th><th>ความชุก (%)</th></tr></thead>
+  <tbody>
+    <tr><td>Schizophrenia (จิตเภท)</td><td>0.78</td></tr>
+    <tr><td>Bipolar disorder (อารมณ์สองขั้ว)</td><td>0.06</td></tr>
+    <tr><td>Major depression (ซึมเศร้ารุนแรง)</td><td>2.28</td></tr>
+    <tr><td>Alcohol and drug addiction (สุรา/สารเสพติด)</td><td>1.25</td></tr>
+    <tr class="total-row"><td>รวม (SMI)</td><td>4.37</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">SMI-V คิดเป็น 11.92% ของผู้ป่วย SMI ทั้งหมด (นับเฉพาะประชากรอายุ 15-60 ปี) — ตัวเลขทั้งหมดปรับได้ที่ "🛠️ ตั้งค่าระบบ" หากกรมสุขภาพจิตประกาศตัวเลขใหม่ในปีถัดไป</p>
+
+<h2>7. แหล่งอ้างอิงและติดต่อสอบถาม</h2>
+<p>เอกสารต้นทาง: Template ตัวชี้วัดร้อยละผู้ป่วยจิตเวชสารเสพติดที่มีความเสี่ยงก่อความรุนแรง (SMI-V) กรมสุขภาพจิต กระทรวงสาธารณสุข</p>
+<ul>
+  <li>หน้ารายละเอียดตัวชี้วัด: <a href="https://mhso.dmh.go.th/page/subject_details.php?subject_id=469" target="_blank">mhso.dmh.go.th/page/subject_details.php?subject_id=469</a></li>
+  <li>โทรศัพท์: 02 590 8090</li>
+  <li>อีเมล: smiv.dmh@gmail.com</li>
+</ul>
 </div>
 
 <footer>SMI-V Plus <strong>v1.4.0</strong> (GitHub Pages, static) · build 2026-09-10 — <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a> · ทำงานทั้งหมดใน browser ไม่มี server/ฐานข้อมูล</footer>
