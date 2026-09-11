@@ -75,6 +75,27 @@ test('checkLowAccessRatePersistence: ไม่มีข้อมูลประ�
   assert.equal(banner.hidden, true);
 });
 
+test('exportReportXlsx: จำนวนคอลัมน์ของ header ต้องตรงกับทุกแถวข้อมูล (รวมแถวรวม) — บั๊กที่เคยเกิดจริง', () => {
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: '1', fiscal_year_be: 2569 }), mkPatient({ pid: '2', ampur: '02', fiscal_year_be: 2569 })];
+  sandbox.window.smivEngine.state.population = {};
+  sandbox.exportReportXlsx('ampur');
+  const aoa = sandbox.XLSX.lastAoa;
+  const headerRow = aoa[2]; // [title], [blank], [cols], ...rows
+  const dataRows = aoa.slice(3);
+  assert.ok(dataRows.length > 0, 'ต้องมีอย่างน้อย 1 แถวข้อมูล (รวมแถวรวม) ให้ตรวจสอบ');
+  for (const row of dataRows) assert.equal(row.length, headerRow.length, `แถวข้อมูล [${row}] มีจำนวนคอลัมน์ไม่ตรงกับ header`);
+});
+
+test('exportIssuesXlsx: จำนวนคอลัมน์ของ header ต้องตรงกับทุกแถวข้อมูล — บั๊กที่เคยเกิดจริง', () => {
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: '1', fiscal_year_be: 2569, follow_last: null })];
+  sandbox.exportIssuesXlsx();
+  const aoa = sandbox.XLSX.lastAoa;
+  const headerRow = aoa[0];
+  const dataRows = aoa.slice(1);
+  assert.ok(dataRows.length > 0, 'ต้องมีอย่างน้อย 1 แถวปัญหาให้ตรวจสอบ (patient มี follow_last ว่างจงใจให้ติดเกณฑ์)');
+  for (const row of dataRows) assert.equal(row.length, headerRow.length, `แถวข้อมูล [${row}] มีจำนวนคอลัมน์ไม่ตรงกับ header`);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
