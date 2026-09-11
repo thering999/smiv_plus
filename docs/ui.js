@@ -203,6 +203,8 @@ function render() {
   $('#kpiArea').textContent = shownReport.length;
   $('#kpiAreaLabel').textContent = REPORT_LEVELS[level];
 
+  checkLowAccessRatePersistence(totals.e, hasPopulationData);
+
   if (!hasPopulationData) {
     $('#popWarning').hidden = false;
   } else {
@@ -281,6 +283,48 @@ function renderYearComparison(fy) {
 }
 
 // ---------- URL แชร์มุมมองได้ (?fy=..&level=..&area=..) ----------
+// ---------- แจ้งเตือนถ้า E ต่ำกว่าเป้า 40% นานเกิน 30 วันติดต่อกัน (นับจากวันแรกที่เจอ ไม่ใช่แค่ครั้งเดียว) ----------
+const LOW_E_SINCE_KEY = 'smivplus_low_e_since';
+const LOW_E_THRESHOLD_DAYS = 30;
+let lowENotified = false;
+
+function checkLowAccessRatePersistence(ePct, hasPopulationData) {
+  const banner = $('#lowEAlertBanner');
+  if (!banner) return;
+  if (!hasPopulationData) { banner.hidden = true; return; }
+
+  let since;
+  try { since = localStorage.getItem(LOW_E_SINCE_KEY); } catch (e) { since = null; }
+
+  if (ePct >= 40) {
+    try { localStorage.removeItem(LOW_E_SINCE_KEY); } catch (e) {}
+    banner.hidden = true;
+    lowENotified = false;
+    return;
+  }
+
+  if (!since) {
+    since = new Date().toISOString();
+    try { localStorage.setItem(LOW_E_SINCE_KEY, since); } catch (e) {}
+  }
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
+  if (days >= LOW_E_THRESHOLD_DAYS) {
+    banner.hidden = false;
+    $('#lowEAlertText').textContent = `อัตราเข้าถึงบริการ (E) ต่ำกว่าเป้า 40% ต่อเนื่องมา ${days} วัน (ปัจจุบัน ${ePct.toFixed(2)}%)`;
+    if (!lowENotified && notificationSupported() && Notification.permission === 'granted') {
+      new Notification('SMI-V Plus — อัตราเข้าถึงบริการต่ำต่อเนื่อง', {
+        body: `E ต่ำกว่าเป้า 40% มา ${days} วันแล้ว (ปัจจุบัน ${ePct.toFixed(2)}%)`,
+        tag: 'smiv-low-e-alert',
+      });
+      lowENotified = true;
+    }
+  } else {
+    banner.hidden = true;
+  }
+}
+
+const LAST_VIEW_KEY = 'smivplus_last_view';
+
 function syncUrlFromControls(fy, level, area) {
   const params = new URLSearchParams();
   params.set('fy', fy);
@@ -289,13 +333,23 @@ function syncUrlFromControls(fy, level, area) {
   const qs = params.toString();
   const newUrl = location.pathname + (qs ? '?' + qs : '');
   if (newUrl !== location.pathname + location.search) history.replaceState(null, '', newUrl);
+  try { localStorage.setItem(LAST_VIEW_KEY, JSON.stringify({ level, area })); } catch (e) {}
 }
 
 function applyUrlToControls() {
   const params = new URLSearchParams(location.search);
-  const fy = params.get('fy');
-  const level = params.get('level');
-  const area = params.get('area');
+  let fy = params.get('fy');
+  let level = params.get('level');
+  let area = params.get('area');
+
+  // ถ้า URL ไม่ได้ระบุ level/area ไว้ ใช้ค่าที่จำไว้จากการใช้งานครั้งก่อน
+  if (!level && !area) {
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_VIEW_KEY) || 'null');
+      if (last) { level = last.level; area = last.area; }
+    } catch (e) {}
+  }
+
   if (fy) $('#fySelect').value = fy;
   if (level) $('#levelSelect').value = level;
   if (area) $('#areaSelect').dataset.pendingUrlArea = area;
@@ -1073,3 +1127,9 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}

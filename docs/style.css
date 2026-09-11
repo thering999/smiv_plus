@@ -97,7 +97,7 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
 
 @media print{
   @page{margin:12mm}
-  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
+  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,#lowEAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
   body{background:#fff}
   main{padding:0;max-width:100%}
   h2{page-break-after:avoid;break-after:avoid}

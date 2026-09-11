@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>SMI-V Plus</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2c6e91">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -121,6 +124,9 @@
   <div id="popWarning" class="alert" hidden>ยังไม่มีข้อมูลประชากร 15-60 ปี (H) — อัตราเข้าถึงบริการ (E) จะเป็น 0 จนกว่าจะกรอกที่ปุ่ม "ประชากร/ประมาณการณ์"</div>
   <div id="riskAlertBanner" class="alert" hidden style="background:#fdecea;border-color:#f5c6cb;cursor:pointer">
     🔴 <strong id="riskAlertText"></strong> — คลิกเพื่อดูรายชื่อ
+  </div>
+  <div id="lowEAlertBanner" class="alert" hidden style="background:#fef6e7;color:#8a5a00;border-color:#f5dca0">
+    ⚠️ <strong id="lowEAlertText"></strong>
   </div>
   <button class="btn btn-outline" id="enableNotifyBtn" hidden style="margin-bottom:16px">🔔 เปิดแจ้งเตือนเบราว์เซอร์เมื่อพบผู้ป่วยเสี่ยงสูง</button>
 
@@ -467,7 +473,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260911a"></script>
-<script src="ui.js?v=20260911a"></script>
+<script src="app.js?v=20260911c"></script>
+<script src="ui.js?v=20260911c"></script>
 </body>
 </html>
