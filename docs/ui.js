@@ -178,6 +178,7 @@ function render() {
   renderFindings(report, level);
   renderCharts(report, totals, level, hasPopulationData);
   renderQualityScore(shownTotals);
+  renderProblemPatients(fy, level, areaFilter);
   saveLocal();
 }
 
@@ -385,20 +386,25 @@ function exportReportXlsx(levelOverride) {
   XLSX.writeFile(wb, `smiv_report_${level}_${fy}.xlsx`);
 }
 
-function exportIssuesXlsx() {
-  const fy = currentFy(), level = currentLevel();
+const ISSUE_ACTION_FOR = {
+  'ก่อความรุนแรงซ้ำ': 'จัด Conference ทีมสหวิชาชีพ + ทำ Individual Care Plan รายบุคคล เพิ่มความถี่เยี่ยมตามระดับความเสี่ยง',
+  'ขาดการติดตาม (follow_last ว่าง)': 'นัดติดตามอาการ/ลงพื้นที่เยี่ยมบ้านโดยเร็ว และลงรหัส 1B037 เมื่อประเมินแล้ว',
+  'ไม่เคยติดตามซ้ำ': 'ประสาน อสม./รพ.สต. ติดตามเยี่ยมครั้งที่ 2 ให้ครบเกณฑ์ "ติดตามต่อเนื่องอย่างน้อย 2 ครั้ง/ปีงบ"',
+  'สงสัยลงรหัสผิด (ติดตาม=วันแรก)': 'ตรวจสอบกับผู้บันทึกว่าลงรหัส 1B037 ซ้ำวันเดียวกับ 1B030-1B033 ครั้งแรกโดยไม่ได้ตั้งใจหรือไม่',
+  'ไม่มีวันเกิด': 'ตรวจสอบและเพิ่มวันเดือนปีเกิดในระบบ HIS ต้นทาง',
+  'ไม่มีตำบล': 'ตรวจสอบและเพิ่มรหัสตำบลที่อยู่ในระบบ HIS ต้นทาง',
+  'ค้างติดตามนาน (>90 วัน)': 'ให้ลำดับความสำคัญก่อน — ติดตามเยี่ยมบ้าน/โทรศัพท์ด่วนที่สุด',
+};
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function buildProblemPatients(fy, level, areaFilter) {
   const maxAge = state.settings.max_age_included;
-  const areaFilter = $('#areaSelect').value;
-
-  const actionFor = {
-    'ก่อความรุนแรงซ้ำ': 'จัด Conference ทีมสหวิชาชีพ + ทำ Individual Care Plan รายบุคคล เพิ่มความถี่เยี่ยมตามระดับความเสี่ยง',
-    'ขาดการติดตาม (follow_last ว่าง)': 'นัดติดตามอาการ/ลงพื้นที่เยี่ยมบ้านโดยเร็ว และลงรหัส 1B037 เมื่อประเมินแล้ว',
-    'ไม่เคยติดตามซ้ำ': 'ประสาน อสม./รพ.สต. ติดตามเยี่ยมครั้งที่ 2 ให้ครบเกณฑ์ "ติดตามต่อเนื่องอย่างน้อย 2 ครั้ง/ปีงบ"',
-    'สงสัยลงรหัสผิด (ติดตาม=วันแรก)': 'ตรวจสอบกับผู้บันทึกว่าลงรหัส 1B037 ซ้ำวันเดียวกับ 1B030-1B033 ครั้งแรกโดยไม่ได้ตั้งใจหรือไม่',
-    'ไม่มีวันเกิด': 'ตรวจสอบและเพิ่มวันเดือนปีเกิดในระบบ HIS ต้นทาง',
-    'ไม่มีตำบล': 'ตรวจสอบและเพิ่มรหัสตำบลที่อยู่ในระบบ HIS ต้นทาง',
-  };
-
   const rows = [];
   for (const p of state.patients) {
     if (p.fiscal_year_be > fy) continue;
@@ -407,6 +413,9 @@ function exportIssuesXlsx() {
       const key = level === 'hoscode' ? p.hoscode : (level === 'chw_addr' ? p.chw_addr : p.ampur);
       if (String(key) !== areaFilter) continue;
     }
+    const lastContact = p.follow_last || p.first_date_serv;
+    const daysOverdue = daysSince(lastContact);
+
     const issues = [];
     if (p.has_repeat_violence) issues.push('ก่อความรุนแรงซ้ำ');
     if (!p.follow_last) issues.push('ขาดการติดตาม (follow_last ว่าง)');
@@ -414,15 +423,61 @@ function exportIssuesXlsx() {
     if (p.follow_last && p.follow_last === p.first_date_serv) issues.push('สงสัยลงรหัสผิด (ติดตาม=วันแรก)');
     if (!p.birth) issues.push('ไม่มีวันเกิด');
     if (!p.tambon) issues.push('ไม่มีตำบล');
+    if (daysOverdue !== null && daysOverdue > 90) issues.push('ค้างติดตามนาน (>90 วัน)');
     if (!issues.length) continue;
-    const priority = p.has_repeat_violence ? 'สูง' : (issues.length >= 2 ? 'กลาง' : 'ปกติ');
-    rows.push({ p, issues, priority, recommendations: issues.map(i => actionFor[i] || '').join(' | ') });
+
+    const priority = p.has_repeat_violence ? 'สูง' : ((issues.length >= 2 || (daysOverdue !== null && daysOverdue > 90)) ? 'กลาง' : 'ปกติ');
+    rows.push({
+      p, issues, priority, daysOverdue, lastContact,
+      recommendations: issues.map(i => ISSUE_ACTION_FOR[i] || '').filter(Boolean).join(' | '),
+    });
   }
   const order = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
-  rows.sort((a, b) => order[a.priority] - order[b.priority]);
+  rows.sort((a, b) => order[a.priority] - order[b.priority] || (b.daysOverdue || 0) - (a.daysOverdue || 0));
+  return rows;
+}
 
-  const cols = ['hoscode','hosname','pid','cid','name','lname','birth','sex','chw_addr','tambon','ampur','first_date_serv','date_serv','diagcode','b03x','follow_last','จำนวนรหัสSMIV','ครั้งที่มารับบริการ','ความสำคัญ','ปัญหาที่พบ','คำแนะนำ'];
-  const data = rows.map(({ p, issues, priority, recommendations }) => [p.hoscode,p.hosname,p.pid,p.cid,p.name,p.lname,p.birth,p.sex,p.chw_addr,p.tambon,p.ampur,p.first_date_serv,p.date_serv_raw,p.diagcode_raw,p.b03x_raw,p.follow_last||'NULL',p.smiv_code_count,p.total_visits,priority,issues.join('; '),recommendations]);
+function renderProblemPatients(fy, level, areaFilter) {
+  const box = $('#problemPatientsBox');
+  if (!box) return;
+  const rows = buildProblemPatients(fy, level, areaFilter);
+  $('#problemPatientsCount').textContent = rows.length;
+
+  const priorityCount = { 'สูง': 0, 'กลาง': 0, 'ปกติ': 0 };
+  for (const r of rows) priorityCount[r.priority]++;
+  drawChart('chartProblemPriority', {
+    type: 'doughnut',
+    data: { labels: ['สูง (ก่อความรุนแรงซ้ำ)', 'กลาง (หลายปัญหา/ค้างนาน)', 'ปกติ'], datasets: [{ data: [priorityCount['สูง'], priorityCount['กลาง'], priorityCount['ปกติ']], backgroundColor: ['#c0392b', '#e0a63c', '#9aa5ad'] }] },
+    options: { responsive: true },
+  });
+
+  if (!rows.length) {
+    box.innerHTML = '<p class="note">ไม่พบผู้ป่วยที่เข้าเกณฑ์ต้องติดตาม/แก้ไขข้อมูลในเงื่อนไขปัจจุบัน</p>';
+    return;
+  }
+  const top = rows.slice(0, 20);
+  const rowsHtml = top.map(({ p, issues, priority, daysOverdue }) => `
+    <tr>
+      <td>${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
+      <td>${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
+      <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
+      <td>${escapeHtml(p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
+      <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
+      <td>${issues.join(', ')}</td>
+    </tr>`).join('');
+  box.innerHTML = `<div class="table-scroll"><table class="report-table">
+    <thead><tr><th>ความสำคัญ</th><th>ชื่อ-สกุล</th><th>หน่วยบริการ</th><th>อำเภอ/ตำบล</th><th>ค้างติดตามมา</th><th>ปัญหาที่พบ</th></tr></thead>
+    <tbody>${rowsHtml}</tbody></table></div>
+    ${rows.length > 20 ? `<p class="note" style="margin-top:8px">แสดง 20 จาก ${rows.length} คน — กด "ส่งออกรายชื่อปัญหา" เพื่อดูทั้งหมดพร้อมคำแนะนำรายคน</p>` : ''}`;
+}
+
+function exportIssuesXlsx() {
+  const fy = currentFy(), level = currentLevel();
+  const areaFilter = $('#areaSelect').value;
+  const rows = buildProblemPatients(fy, level, areaFilter);
+
+  const cols = ['hoscode','hosname','pid','cid','name','lname','birth','sex','chw_addr','tambon','ampur','first_date_serv','date_serv','diagcode','b03x','follow_last','จำนวนรหัสSMIV','ครั้งที่มารับบริการ','ค้างติดตาม(วัน)','ความสำคัญ','ปัญหาที่พบ','คำแนะนำ'];
+  const data = rows.map(({ p, issues, priority, recommendations, daysOverdue }) => [p.hoscode,p.hosname,p.pid,p.cid,p.name,p.lname,p.birth,p.sex,p.chw_addr,p.tambon,p.ampur,p.first_date_serv,p.date_serv_raw,p.diagcode_raw,p.b03x_raw,p.follow_last||'NULL',p.smiv_code_count,p.total_visits,daysOverdue===null?'':daysOverdue,priority,issues.join('; '),recommendations]);
   const ws = XLSX.utils.aoa_to_sheet([cols, ...(data.length ? data : [['ไม่พบผู้ป่วยที่มีปัญหาตามเกณฑ์']])]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'ปัญหา');
@@ -582,6 +637,7 @@ async function init() {
   $('#exportReportHoscodeBtn').addEventListener('click', () => exportReportXlsx('hoscode'));
   $('#exportReportChwBtn').addEventListener('click', () => exportReportXlsx('chw_addr'));
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
+  $('#exportIssuesBtn2').addEventListener('click', exportIssuesXlsx);
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#publishBtn').addEventListener('click', publishData);
   $('#publishGithubBtn').addEventListener('click', publishToGithub);

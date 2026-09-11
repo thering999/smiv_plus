@@ -155,11 +155,19 @@
     <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่รายเดือน</h3><canvas id="chartMonthlyTrend"></canvas></div>
     <div class="chart-box"><h3>แนวโน้มผู้ป่วยใหม่ข้ามปีงบ (ทุกข้อมูลที่มี)</h3><canvas id="chartYearlyTrend"></canvas></div>
     <div class="chart-box"><h3>สัดส่วนเพศ (ผู้ป่วยสะสมทั้งหมด)</h3><canvas id="chartSex"></canvas></div>
+    <div class="chart-box"><h3>ระดับความสำคัญผู้ป่วยที่ต้องติดตาม</h3><canvas id="chartProblemPriority"></canvas></div>
   </div>
 
   <div id="issueCategoryChartBox" class="chart-box" style="max-width:700px;margin-bottom:24px" hidden>
     <h3>สรุปปัญหาแยกประเด็น (จำนวนพื้นที่ที่พบ)</h3>
     <canvas id="chartIssueCategory"></canvas>
+  </div>
+
+  <h2>รายชื่อผู้ป่วยที่ต้องติดตาม/แก้ไขข้อมูล (<span id="problemPatientsCount">0</span> คน)</h2>
+  <div class="card">
+    <p class="note">🔴 สูง = ก่อความรุนแรงซ้ำ (ติดตามด่วนที่สุด) · 🟠 กลาง = มีปัญหาหลายข้อ/ค้างติดตามนาน · ⚪ ปกติ = พบปัญหาข้อเดียว</p>
+    <div id="problemPatientsBox"></div>
+    <button class="btn btn-outline" id="exportIssuesBtn2" style="margin-top:10px">📋 ส่งออกรายชื่อปัญหา (Excel พร้อมคำแนะนำรายคน)</button>
   </div>
 
   <h2>สรุปปัญหาแยกรายพื้นที่</h2>
