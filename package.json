@@ -1,0 +1,8 @@
+{
+  "name": "smiv-plus",
+  "private": true,
+  "description": "Regression tests for the SMI-V Plus calculation engine (docs/app.js)",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
