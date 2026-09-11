@@ -331,12 +331,39 @@ function buildYearlyTrend() {
   return { years, newPatients: years.map(y => counts[y]) };
 }
 
+// เทรนด์รายปีงบ แยกตามอำเภอ (เฉพาะ 7 อำเภอหลักในพื้นที่ + "อื่นๆ" รวมนอกพื้นที่)
+function buildYearlyTrendByAmpur() {
+  const byAmpur = {};
+  for (const p of state.patients) {
+    const key = KNOWN_AMPUR[p.ampur] ? p.ampur : 'other';
+    if (!byAmpur[key]) byAmpur[key] = {};
+    byAmpur[key][p.fiscal_year_be] = (byAmpur[key][p.fiscal_year_be] || 0) + 1;
+  }
+  const yearsSet = new Set();
+  for (const p of state.patients) yearsSet.add(p.fiscal_year_be);
+  const years = Array.from(yearsSet).sort((a, b) => a - b);
+
+  const ampurKeys = Object.keys(byAmpur).sort((a, b) => {
+    if (a === 'other') return 1;
+    if (b === 'other') return -1;
+    const totalA = Object.values(byAmpur[a]).reduce((s, n) => s + n, 0);
+    const totalB = Object.values(byAmpur[b]).reduce((s, n) => s + n, 0);
+    return totalB - totalA;
+  });
+
+  const series = ampurKeys.map(key => ({
+    key, label: key === 'other' ? 'อื่นๆ (นอกพื้นที่)' : (KNOWN_AMPUR[key] || key),
+    data: years.map(y => byAmpur[key][y] || 0),
+  }));
+  return { years, series };
+}
+
 // ---------- export ----------
 window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend,
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur,
 };
 
 })();
