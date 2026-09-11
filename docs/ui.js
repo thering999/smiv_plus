@@ -126,6 +126,21 @@ async function handleUpload(file) {
   try {
     const wb = await readWorkbook(file);
     const patients = validateAndParse(wb);
+
+    // เช็คแถวซ้ำ PID ภายในไฟล์เดียวกัน (ไม่ใช่การ upsert ปกติ แต่ไฟล์เองมีแถวซ้ำ — เสี่ยงข้อมูลผิด)
+    const seenInFile = new Map();
+    const dupInFile = [];
+    for (const p of patients) {
+      const key = `${p.hoscode}|${p.pid}`;
+      if (seenInFile.has(key)) dupInFile.push(`${p.pid} (${p.name || ''} ${p.lname || ''})`.trim());
+      seenInFile.set(key, true);
+    }
+    if (dupInFile.length) {
+      const preview = dupInFile.slice(0, 10).join(', ') + (dupInFile.length > 10 ? ` และอีก ${dupInFile.length - 10} รายการ` : '');
+      const ok = confirm(`⚠️ พบ PID ซ้ำกัน ${dupInFile.length} รายการภายในไฟล์นี้เอง (จะเก็บเฉพาะแถวสุดท้ายของแต่ละ PID):\n\n${preview}\n\nต้องการนำเข้าต่อหรือไม่?`);
+      if (!ok) { setStatus('ยกเลิกการนำเข้า — ตรวจสอบไฟล์ก่อน', 'error'); return; }
+    }
+
     // upsert by hoscode+pid
     const map = new Map(state.patients.map(p => [`${p.hoscode}|${p.pid}`, p]));
     for (const p of patients) map.set(`${p.hoscode}|${p.pid}`, p);
@@ -437,7 +452,34 @@ function renderTable(report, totals, level) {
     th.classList.toggle('sorted-col', th.dataset.sortKey === mainTableSortKey);
     const base = th.innerHTML.replace(/ [▲▼]$/, '');
     th.innerHTML = base + (th.dataset.sortKey === mainTableSortKey ? (mainTableSortDir === 'asc' ? ' ▲' : ' ▼') : '');
+    th.setAttribute('role', 'button');
+    th.setAttribute('tabindex', '0');
+    th.setAttribute('aria-sort', th.dataset.sortKey === mainTableSortKey ? (mainTableSortDir === 'asc' ? 'ascending' : 'descending') : 'none');
   });
+}
+
+async function exportTableAsImage(tableSelector, filename) {
+  const target = $(tableSelector);
+  const el = target && target.closest('table');
+  if (!el) return;
+  const btn = $('#exportMainTableImgBtn');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'กำลังสร้างภาพ...'; btn.disabled = true; }
+  try {
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+    canvas.toBlob(blob => {
+      if (!blob) { alert('สร้างภาพไม่สำเร็จ ลองใหม่อีกครั้ง'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }, 'image/png');
+  } catch (err) {
+    alert('สร้างภาพไม่สำเร็จ: ' + err.message);
+  } finally {
+    if (btn) { btn.textContent = originalText; btn.disabled = false; }
+  }
 }
 
 function renderFindings(report, level) {
@@ -480,6 +522,7 @@ function addChartDownloadButton(canvas) {
   btn.type = 'button';
   btn.textContent = '⬇ ภาพ';
   btn.title = 'ดาวน์โหลดกราฟนี้เป็นรูปภาพ (PNG)';
+  btn.setAttribute('aria-label', 'ดาวน์โหลดกราฟนี้เป็นรูปภาพ PNG');
   btn.addEventListener('click', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -911,7 +954,7 @@ function renderProblemPatientsTable() {
   const filteredCount = rows.length;
   const shown = rows.slice(0, ppVisibleCount);
   const arrow = key => key !== ppSortKey ? '' : (ppSortDir === 'asc' ? ' ▲' : ' ▼');
-  const th = (key, label) => `<th data-sort-key="${key}" style="cursor:pointer;user-select:none" title="คลิกเพื่อจัดเรียง">${label}${arrow(key)}</th>`;
+  const th = (key, label) => `<th data-sort-key="${key}" role="button" tabindex="0" aria-sort="${key === ppSortKey ? (ppSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}" style="cursor:pointer;user-select:none" title="คลิกเพื่อจัดเรียง">${label}${arrow(key)}</th>`;
 
   const rowsHtml = shown.map(({ p, issues, priority, daysOverdue }) => `
     <tr>
@@ -946,12 +989,14 @@ function renderProblemPatientsTable() {
   const moreBtn = $('#ppShowMoreBtn');
   if (moreBtn) moreBtn.addEventListener('click', () => { ppVisibleCount += 50; renderProblemPatientsTable(); });
   $$('#problemPatientsBox th[data-sort-key]').forEach(el => {
-    el.addEventListener('click', () => {
+    const sortByThis = () => {
       const key = el.dataset.sortKey;
       if (ppSortKey === key) ppSortDir = ppSortDir === 'asc' ? 'desc' : 'asc';
       else { ppSortKey = key; ppSortDir = key === 'daysOverdue' || key === 'priority' ? 'desc' : 'asc'; }
       renderProblemPatientsTable();
-    });
+    };
+    el.addEventListener('click', sortByThis);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByThis(); } });
   });
 }
 
@@ -1036,15 +1081,29 @@ async function publishToGithub() {
   statusEl.textContent = 'กำลังเผยแพร่...';
   statusEl.className = 'status';
   publishInFlight = true;
+  const payload = buildPayload();
   try {
-    const payload = buildPayload();
-    const res = await fetch(PUBLISH_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
-      body: JSON.stringify(payload),
-    });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
+    let result, res;
+    try {
+      res = await fetch(PUBLISH_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+        body: JSON.stringify(payload),
+      });
+      result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
+    } catch (firstErr) {
+      // เน็ตหลุด/ค้างชั่วคราว — ลองใหม่อัตโนมัติ 1 ครั้งก่อนแจ้งว่าล้มเหลวจริง
+      statusEl.textContent = '⏳ เผยแพร่ไม่สำเร็จ กำลังลองใหม่อีกครั้ง...';
+      await new Promise(r => setTimeout(r, 3000));
+      res = await fetch(PUBLISH_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+        body: JSON.stringify(payload),
+      });
+      result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
+    }
 
     markPublished();
     lastPublishedCount = payload.patients.length;
@@ -1052,7 +1111,12 @@ async function publishToGithub() {
     statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที`;
     statusEl.className = 'status ok';
   } catch (err) {
-    statusEl.textContent = '❌ ล้มเหลว: ' + err.message;
+    statusEl.innerHTML = '';
+    statusEl.appendChild(document.createTextNode('❌ ล้มเหลว (ลองอัตโนมัติแล้ว): ' + err.message + ' '));
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button'; retryBtn.className = 'btn btn-outline'; retryBtn.textContent = 'ลองเผยแพร่อีกครั้ง';
+    retryBtn.addEventListener('click', () => { lastPublishAt = 0; publishToGithub(); });
+    statusEl.appendChild(retryBtn);
     statusEl.className = 'status error';
   } finally {
     publishInFlight = false;
@@ -1218,13 +1282,17 @@ async function init() {
   $('#levelSelect').addEventListener('change', render);
   $('#mainTableSearch').addEventListener('input', e => { mainTableSearch = e.target.value; render(); });
   $$('table.report-table thead th[data-sort-key]').forEach(th => {
-    th.addEventListener('click', () => {
+    const sortByThis = () => {
       const key = th.dataset.sortKey;
       if (mainTableSortKey === key) mainTableSortDir = mainTableSortDir === 'asc' ? 'desc' : 'asc';
       else { mainTableSortKey = key; mainTableSortDir = key === 'ampur_name' ? 'asc' : 'desc'; }
       render();
-    });
+    };
+    th.addEventListener('click', sortByThis);
+    th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByThis(); } });
   });
+  const exportImgBtn = $('#exportMainTableImgBtn');
+  if (exportImgBtn) exportImgBtn.addEventListener('click', () => exportTableAsImage('#reportTableBody', `smiv_table_${currentFy()}.png`));
   $('#areaSelect').addEventListener('change', render);
   $('#dateFrom').addEventListener('change', render);
   $('#dateTo').addEventListener('change', render);
