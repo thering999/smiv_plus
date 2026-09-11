@@ -18,7 +18,7 @@ const GH_OWNER = 'thering999';
 const GH_REPO = 'smiv_plus';
 const GH_PATH = 'docs/data.json';
 const GH_HISTORY_INDEX_PATH = 'docs/history/index.json';
-const GH_HISTORY_KEEP = 30;
+const GH_HISTORY_KEEP = 15; // ลดจาก 30 — ทุก snapshot copy ข้อมูลผู้ป่วยเต็มไฟล์ เก็บมากไปทำให้ repo บวมเรื่อยๆ
 const ALLOWED_ORIGIN = 'https://thering999.github.io';
 
 function corsHeaders() {
@@ -94,12 +94,23 @@ async function updateHistoryIndex(entry, token, attempt = 0) {
   const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
   let list = Array.isArray(idx.json) ? idx.json : [];
   list.push(entry);
-  if (list.length > GH_HISTORY_KEEP) list = list.slice(list.length - GH_HISTORY_KEEP);
+  let dropped = [];
+  if (list.length > GH_HISTORY_KEEP) {
+    dropped = list.slice(0, list.length - GH_HISTORY_KEEP);
+    list = list.slice(list.length - GH_HISTORY_KEEP);
+  }
   try {
     await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `update history index (${list.length} รายการ)`);
   } catch (err) {
     if (err.status === 409 && attempt < 2) return updateHistoryIndex(entry, token, attempt + 1);
     throw err;
+  }
+  // ลบไฟล์ snapshot เดิมของรายการที่หลุดออกจาก index จริงๆ ไม่ให้ค้างในระบบเปล่าๆ (ล้มเหลวได้โดยไม่ทำให้ publish ทั้งหมดพัง)
+  for (const old of dropped) {
+    try {
+      const snap = await ghGetFile(old.file, token);
+      if (snap.sha) await ghDeleteFile(old.file, snap.sha, token, `prune old history snapshot: ${old.file}`);
+    } catch (e) { /* ไม่ critical — เก็บ orphan ไว้ดีกว่า publish ล้มเหลว */ }
   }
 }
 
