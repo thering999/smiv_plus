@@ -65,6 +65,18 @@ async function ghPutFile(path, obj, sha, token, message) {
   }
 }
 
+async function ghDeleteFile(path, sha, token, message) {
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'smiv-plus-worker', 'X-GitHub-Api-Version': '2022-11-28' },
+    body: JSON.stringify({ message, sha }),
+  });
+  if (!res.ok && res.status !== 404) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `delete ${path} failed (${res.status})`);
+  }
+}
+
 // เขียนไฟล์แบบ retry เอง 1 ครั้งถ้าชน sha conflict (409) — เกิดได้เวลามีคนกด publish ซ้อนกันเป๊ะๆ
 async function ghGetThenPut(path, obj, token, message) {
   const cur = await ghGetFile(path, token);
@@ -112,12 +124,28 @@ export default {
     } catch {
       return json({ error: 'invalid JSON body' }, 400);
     }
-    if (!payload || !Array.isArray(payload.patients) || !payload.publishedAt) {
-      return json({ error: 'payload missing patients[]/publishedAt' }, 400);
-    }
 
     const token = env.GH_TOKEN;
     if (!token) return json({ error: 'server not configured (GH_TOKEN missing)' }, 500);
+
+    if (payload && payload.action === 'delete_history') {
+      const file = String(payload.file || '');
+      if (!file.startsWith('docs/history/')) return json({ error: 'invalid file path' }, 400);
+      try {
+        const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
+        const list = (Array.isArray(idx.json) ? idx.json : []).filter(e => e.file !== file);
+        await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `delete history entry: ${file}`);
+        const snap = await ghGetFile(file, token);
+        if (snap.sha) await ghDeleteFile(file, snap.sha, token, `delete history snapshot: ${file}`);
+        return json({ ok: true, remaining: list.length });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 502);
+      }
+    }
+
+    if (!payload || !Array.isArray(payload.patients) || !payload.publishedAt) {
+      return json({ error: 'payload missing patients[]/publishedAt' }, 400);
+    }
 
     try {
       const messageBase = `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`;

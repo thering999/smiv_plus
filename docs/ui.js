@@ -150,6 +150,20 @@ function setStatus(msg, cls) {
 
 // ---------- Controls ----------
 function currentFy() { return Number($('#fySelect').value) || state.settings.current_fiscal_year_be; }
+
+function populateFySelect() {
+  const sel = $('#fySelect');
+  const pendingUrlFy = sel.dataset.pendingUrlFy;
+  const current = pendingUrlFy || sel.value;
+  delete sel.dataset.pendingUrlFy;
+  const years = new Set([state.settings.current_fiscal_year_be]);
+  for (const p of state.patients) years.add(p.fiscal_year_be);
+  for (const fy of Object.keys(state.population)) years.add(Number(fy));
+  const sorted = Array.from(years).filter(Boolean).sort((a, b) => b - a);
+  sel.innerHTML = sorted.map(y => `<option value="${y}">${y}</option>`).join('');
+  if (current && sorted.includes(Number(current))) sel.value = current;
+  else if (sorted.includes(state.settings.current_fiscal_year_be)) sel.value = state.settings.current_fiscal_year_be;
+}
 function currentLevel() { return $('#levelSelect').value || 'ampur'; }
 
 function populateAreaSelect(report) {
@@ -166,6 +180,7 @@ function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
 
 // ---------- Render ----------
 function render() {
+  populateFySelect();
   const fy = currentFy();
   const level = currentLevel();
   const dateFrom = $('#dateFrom').value || null;
@@ -350,7 +365,7 @@ function applyUrlToControls() {
     } catch (e) {}
   }
 
-  if (fy) $('#fySelect').value = fy;
+  if (fy) $('#fySelect').dataset.pendingUrlFy = fy;
   if (level) $('#levelSelect').value = level;
   if (area) $('#areaSelect').dataset.pendingUrlArea = area;
 }
@@ -575,6 +590,44 @@ function renderCharts(report, totals, level, hasPop) {
     accessTrendBox.hidden = true;
   }
 }
+
+// ---------- สรุปผู้บริหาร 1 หน้า สำหรับพิมพ์ ----------
+function printExecutiveSummary() {
+  const fy = currentFy();
+  const { totals } = buildReport(fy, 'ampur', null, null);
+  const problemRows = buildProblemPatients(fy, 'ampur', '');
+  const highCount = problemRows.filter(r => r.priority === 'สูง').length;
+  const topAreas = buildReport(fy, 'ampur', null, null).report
+    .slice().sort((a, b) => b.repeat_violence_count - a.repeat_violence_count).slice(0, 5);
+
+  const content = $('#execSummaryPrint');
+  content.innerHTML = `
+    <h1>สรุปผู้บริหาร — SMI-V ปีงบประมาณ ${fy}</h1>
+    <p class="note">พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')} · ${REPORT_LEVELS.ampur}</p>
+    <div class="exec-kpi-row">
+      <div class="exec-kpi"><div class="label">อัตราเข้าถึงบริการ (E)</div><div class="value">${totals.e.toFixed(2)}%</div></div>
+      <div class="exec-kpi"><div class="label">ผู้ป่วยสะสม (D)</div><div class="value">${fmt(totals.d)}</div></div>
+      <div class="exec-kpi"><div class="label">ต่อเนื่องไม่ก่อซ้ำ (G)</div><div class="value">${totals.g.toFixed(2)}%</div></div>
+      <div class="exec-kpi"><div class="label">ความสำคัญสูง (ก่อซ้ำ)</div><div class="value" style="color:var(--danger)">${fmt(highCount)}</div></div>
+      <div class="exec-kpi"><div class="label">ขาดการติดตาม</div><div class="value">${fmt(totals.missing_followup)}</div></div>
+    </div>
+    <h2 style="margin-top:20px">5 อำเภอที่ก่อความรุนแรงซ้ำสูงสุด</h2>
+    <table class="report-table" style="max-width:600px">
+      <thead><tr><th>อำเภอ</th><th>ผู้ป่วยก่อซ้ำ (คน)</th><th>% ของอำเภอ</th></tr></thead>
+      <tbody>${topAreas.map(r => `<tr><td>${escapeHtml(r.ampur_name)}</td><td>${fmt(r.repeat_violence_count)}</td><td>${pct(r.repeat_violence_count, r.d).toFixed(1)}%</td></tr>`).join('')}</tbody>
+    </table>
+    <p class="note" style="margin-top:16px">รายงานฉบับเต็มดูได้ที่: ${location.origin + location.pathname}</p>`;
+
+  document.body.classList.add('printing-exec-summary');
+  content.hidden = false;
+  window.print();
+}
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-exec-summary');
+  const content = $('#execSummaryPrint');
+  if (content) content.hidden = true;
+});
 
 // ---------- Population editor ----------
 function renderPopulationEditor() {
@@ -969,6 +1022,7 @@ async function loadHistoryList() {
         <td>
           <button class="btn btn-outline" data-history-file="${escapeHtml(item.file)}">👁️ ดูข้อมูลนี้</button>
           <button class="btn btn-danger" data-restore-file="${escapeHtml(item.file)}">↩️ กู้คืนเป็นข้อมูลนี้</button>
+          <button class="btn btn-outline" data-delete-file="${escapeHtml(item.file)}" style="border-color:var(--danger);color:var(--danger)">🗑️ ลบรายการนี้</button>
         </td>
       </tr>`).join('');
     box.innerHTML = `<div class="table-scroll"><table class="report-table">
@@ -980,8 +1034,27 @@ async function loadHistoryList() {
     box.querySelectorAll('[data-restore-file]').forEach(btn => {
       btn.addEventListener('click', () => restoreHistorySnapshot(btn.getAttribute('data-restore-file')));
     });
+    box.querySelectorAll('[data-delete-file]').forEach(btn => {
+      btn.addEventListener('click', () => deleteHistorySnapshot(btn.getAttribute('data-delete-file')));
+    });
   } catch (e) {
     box.innerHTML = '<p class="note">โหลดประวัติไม่สำเร็จ: ' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+async function deleteHistorySnapshot(file) {
+  if (!confirm(`ลบรายการประวัตินี้ถาวร? (ไฟล์ไม่สามารถกู้คืนได้อีก)\n${file}`)) return;
+  try {
+    const res = await fetch(PUBLISH_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+      body: JSON.stringify({ action: 'delete_history', file }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `ลบไม่สำเร็จ (${res.status})`);
+    loadHistoryList();
+  } catch (e) {
+    alert('ลบไม่สำเร็จ: ' + e.message);
   }
 }
 
@@ -1053,7 +1126,6 @@ function clearAllData() {
 async function init() {
   const publishedOk = await loadPublished();
   if (!publishedOk) loadLocal();
-  if (state.settings.current_fiscal_year_be) $('#fySelect').value = state.settings.current_fiscal_year_be;
   applyUrlToControls();
   seedDefaultPopulationNames(currentFy());
   render();
@@ -1084,6 +1156,7 @@ async function init() {
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
+  $('#printExecSummaryBtn').addEventListener('click', printExecutiveSummary);
   $('#levelSelect').addEventListener('change', render);
   $('#mainTableSearch').addEventListener('input', e => { mainTableSearch = e.target.value; render(); });
   $$('table.report-table thead th[data-sort-key]').forEach(th => {
@@ -1124,6 +1197,15 @@ async function init() {
   updateNotifyButton();
   const notifyBtn = $('#enableNotifyBtn');
   if (notifyBtn) notifyBtn.addEventListener('click', requestNotifyPermission);
+
+  // ดึงข้อมูลใหม่อัตโนมัติทุก 5 นาที — เผื่อเปิดจอค้างไว้ (เช่น จอในห้องทำงาน) จะได้เห็นข้อมูลล่าสุดโดยไม่ต้อง reload เอง
+  // ข้ามถ้ากำลังดูประวัติย้อนหลังอยู่ หรือมีการแก้ไขที่ยังไม่ได้เผยแพร่ (กันข้อมูลที่กำลังแก้อยู่หาย)
+  setInterval(async () => {
+    if (viewingHistory || unpublishedChanges) return;
+    const prevPublishedAt = state.patients.length ? $('#publishedAt').textContent : '';
+    const ok = await loadPublished();
+    if (ok && $('#publishedAt').textContent !== prevPublishedAt) render();
+  }, 5 * 60 * 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);
