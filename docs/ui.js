@@ -225,8 +225,27 @@ function renderQualityScore(totals) {
   $('#score10m').textContent = `${score10}/10`;
 }
 
+let mainTableSortKey = null;
+let mainTableSortDir = 'asc';
+let mainTableSearch = '';
+
 function renderTable(report, totals, level) {
   const tbody = $('#reportTableBody');
+
+  let rows = report;
+  if (mainTableSearch.trim()) {
+    const term = mainTableSearch.trim().toLowerCase();
+    rows = rows.filter(r => (r.ampur_name || '').toLowerCase().includes(term));
+  }
+  if (mainTableSortKey) {
+    rows = rows.slice().sort((a, b) => {
+      const av = a[mainTableSortKey], bv = b[mainTableSortKey];
+      const cmp = typeof av === 'string' ? av.localeCompare(bv, 'th') : av - bv;
+      return mainTableSortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+  report = rows;
+
   tbody.innerHTML = report.map(r => `
     <tr>
       <td>${escapeHtml(r.ampur_name)}</td>
@@ -247,6 +266,12 @@ function renderTable(report, totals, level) {
       <td>${fmt(totals.missing_followup)}</td>
     </tr>`;
   $('#tableAreaLabel').textContent = REPORT_LEVELS[level];
+
+  $$('table.report-table thead th[data-sort-key]').forEach(th => {
+    th.classList.toggle('sorted-col', th.dataset.sortKey === mainTableSortKey);
+    const base = th.innerHTML.replace(/ [▲▼]$/, '');
+    th.innerHTML = base + (th.dataset.sortKey === mainTableSortKey ? (mainTableSortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  });
 }
 
 function renderFindings(report, level) {
@@ -591,12 +616,54 @@ function renderProblemPatients(fy, level, areaFilter) {
     options: { responsive: true },
   });
 
-  if (!rows.length) {
+  problemPatientsAll = rows;
+  ppVisibleCount = 20;
+  renderProblemPatientsTable();
+}
+
+// ---------- ค้นหา/กรอง/จัดเรียง/แสดงเพิ่ม สำหรับตารางรายชื่อผู้ป่วยที่ต้องติดตาม ----------
+let problemPatientsAll = [];
+let ppSearchTerm = '';
+let ppPriorityFilter = '';
+let ppSortKey = 'daysOverdue';
+let ppSortDir = 'desc';
+let ppVisibleCount = 20;
+
+const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'อำเภอ/ตำบล', daysOverdue: 'ค้างติดตามมา' };
+const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
+
+function renderProblemPatientsTable() {
+  const box = $('#problemPatientsBox');
+  if (!box) return;
+  if (!problemPatientsAll.length) {
     box.innerHTML = '<p class="note">ไม่พบผู้ป่วยที่เข้าเกณฑ์ต้องติดตาม/แก้ไขข้อมูลในเงื่อนไขปัจจุบัน</p>';
     return;
   }
-  const top = rows.slice(0, 20);
-  const rowsHtml = top.map(({ p, issues, priority, daysOverdue }) => `
+
+  let rows = problemPatientsAll;
+  if (ppPriorityFilter) rows = rows.filter(r => r.priority === ppPriorityFilter);
+  if (ppSearchTerm.trim()) {
+    const term = ppSearchTerm.trim().toLowerCase();
+    rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon].some(v => (v || '').toLowerCase().includes(term)));
+  }
+  rows = rows.slice().sort((a, b) => {
+    let av, bv;
+    if (ppSortKey === 'priority') { av = PP_PRIORITY_ORDER[a.priority]; bv = PP_PRIORITY_ORDER[b.priority]; }
+    else if (ppSortKey === 'name') { av = (a.p.name || '') + (a.p.lname || ''); bv = (b.p.name || '') + (b.p.lname || ''); }
+    else if (ppSortKey === 'hosname') { av = a.p.hosname || ''; bv = b.p.hosname || ''; }
+    else if (ppSortKey === 'ampur') { av = a.p.ampur || ''; bv = b.p.ampur || ''; }
+    else { av = a.daysOverdue ?? -1; bv = b.daysOverdue ?? -1; }
+    if (av < bv) return ppSortDir === 'asc' ? -1 : 1;
+    if (av > bv) return ppSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const filteredCount = rows.length;
+  const shown = rows.slice(0, ppVisibleCount);
+  const arrow = key => key !== ppSortKey ? '' : (ppSortDir === 'asc' ? ' ▲' : ' ▼');
+  const th = (key, label) => `<th data-sort-key="${key}" style="cursor:pointer;user-select:none" title="คลิกเพื่อจัดเรียง">${label}${arrow(key)}</th>`;
+
+  const rowsHtml = shown.map(({ p, issues, priority, daysOverdue }) => `
     <tr>
       <td>${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
       <td>${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
@@ -605,10 +672,37 @@ function renderProblemPatients(fy, level, areaFilter) {
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
       <td>${issues.join(', ')}</td>
     </tr>`).join('');
-  box.innerHTML = `<div class="table-scroll"><table class="report-table">
-    <thead><tr><th>ความสำคัญ</th><th>ชื่อ-สกุล</th><th>หน่วยบริการ</th><th>อำเภอ/ตำบล</th><th>ค้างติดตามมา</th><th>ปัญหาที่พบ</th></tr></thead>
+
+  box.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+      <div><label style="font-size:.85em;font-weight:600;display:block;margin-bottom:4px">ค้นหา</label>
+        <input type="text" id="ppSearchInput" placeholder="ชื่อ, หน่วยบริการ, อำเภอ..." value="${escapeHtml(ppSearchTerm)}" style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;min-width:220px"></div>
+      <div><label style="font-size:.85em;font-weight:600;display:block;margin-bottom:4px">กรองตามความสำคัญ</label>
+        <select id="ppPriorityFilter" style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit">
+          <option value="">— ทั้งหมด —</option>
+          <option value="สูง" ${ppPriorityFilter === 'สูง' ? 'selected' : ''}>🔴 สูง</option>
+          <option value="กลาง" ${ppPriorityFilter === 'กลาง' ? 'selected' : ''}>🟠 กลาง</option>
+          <option value="ปกติ" ${ppPriorityFilter === 'ปกติ' ? 'selected' : ''}>⚪ ปกติ</option>
+        </select></div>
+      <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน</div>
+    </div>
+    <div class="table-scroll"><table class="report-table">
+    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th></tr></thead>
     <tbody>${rowsHtml}</tbody></table></div>
-    ${rows.length > 20 ? `<p class="note" style="margin-top:8px">แสดง 20 จาก ${rows.length} คน — กด "ส่งออกรายชื่อปัญหา" เพื่อดูทั้งหมดพร้อมคำแนะนำรายคน</p>` : ''}`;
+    ${filteredCount > ppVisibleCount ? `<button class="btn btn-outline" id="ppShowMoreBtn" style="margin-top:10px">แสดงเพิ่ม (${Math.min(50, filteredCount - ppVisibleCount)} จาก ${filteredCount - ppVisibleCount} ที่เหลือ)</button>` : ''}`;
+
+  $('#ppSearchInput').addEventListener('input', e => { ppSearchTerm = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
+  $('#ppPriorityFilter').addEventListener('change', e => { ppPriorityFilter = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
+  const moreBtn = $('#ppShowMoreBtn');
+  if (moreBtn) moreBtn.addEventListener('click', () => { ppVisibleCount += 50; renderProblemPatientsTable(); });
+  $$('#problemPatientsBox th[data-sort-key]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.sortKey;
+      if (ppSortKey === key) ppSortDir = ppSortDir === 'asc' ? 'desc' : 'asc';
+      else { ppSortKey = key; ppSortDir = key === 'daysOverdue' || key === 'priority' ? 'desc' : 'asc'; }
+      renderProblemPatientsTable();
+    });
+  });
 }
 
 function exportIssuesXlsx() {
@@ -832,6 +926,15 @@ async function init() {
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
   $('#levelSelect').addEventListener('change', render);
+  $('#mainTableSearch').addEventListener('input', e => { mainTableSearch = e.target.value; render(); });
+  $$('table.report-table thead th[data-sort-key]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (mainTableSortKey === key) mainTableSortDir = mainTableSortDir === 'asc' ? 'desc' : 'asc';
+      else { mainTableSortKey = key; mainTableSortDir = key === 'ampur_name' ? 'asc' : 'desc'; }
+      render();
+    });
+  });
   $('#areaSelect').addEventListener('change', render);
   $('#dateFrom').addEventListener('change', render);
   $('#dateTo').addEventListener('change', render);
