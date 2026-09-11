@@ -9,3 +9,4 @@ credentials.local.txt
 .playwright-mcp/
 test_upload.xlsx
 .claude/settings.local.json
+worker/.wrangler/

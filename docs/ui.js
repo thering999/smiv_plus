@@ -453,92 +453,34 @@ function markPublished() {
   if (banner) banner.hidden = true;
 }
 
-// ---------- Publish ตรงเข้า GitHub (ทับ docs/data.json ทันที) ----------
-// GitHub push-protection บล็อกการ commit token ที่ฝังถาวรในซอร์สโค้ด (สแกนเจอ secret จริง)
-// จึงเก็บ token ไว้ใน localStorage ของเบราว์เซอร์เครื่องนี้แทน — ถามแค่ครั้งเดียวตลอดไป (ไม่ใช่ทุก session)
-// ไม่เคย commit เข้า git และไม่อยู่ในซอร์สโค้ดที่เผยแพร่
-const GH_OWNER = 'thering999';
-const GH_REPO = 'smiv_plus';
-const GH_PATH = 'docs/data.json';
-const GH_HISTORY_INDEX_PATH = 'docs/history/index.json';
-const GH_HISTORY_KEEP = 30; // เก็บย้อนหลังล่าสุดกี่ครั้ง กันไฟล์ index บวมไม่จำกัด
-const GH_TOKEN_KEY = 'smiv_gh_token';
-
-function getGithubToken() {
-  return localStorage.getItem(GH_TOKEN_KEY) || '';
-}
-
-async function ghGetFile(path, token) {
-  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
-  });
-  if (res.status === 404) return { sha: null, json: null };
-  if (!res.ok) { const e = new Error(`อ่านไฟล์ ${path} ไม่สำเร็จ (${res.status})`); e.status = res.status; throw e; }
-  const j = await res.json();
-  const text = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))));
-  return { sha: j.sha, json: JSON.parse(text) };
-}
-
-async function ghPutFile(path, obj, sha, token, message) {
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
-    method: 'PUT',
-    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, content, sha: sha || undefined }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const e = new Error(err.message || `บันทึก ${path} ไม่สำเร็จ (${res.status})`);
-    e.status = res.status;
-    throw e;
-  }
-}
+// ---------- Publish เข้า GitHub ผ่าน Cloudflare Worker proxy ----------
+// Worker เก็บ GitHub token จริงไว้ฝั่งเซิร์ฟเวอร์ (ไม่เคยส่งมาที่เบราว์เซอร์) เว็บนี้แค่ยิง
+// payload ไปให้ Worker เขียนเข้า GitHub แทน — จึงกดปุ่มแล้วเผยแพร่ได้ทันทีไม่ต้องถาม token เลย
+// SITE_KEY ด้านล่างไม่ใช่ secret จริง (ใครอ่านซอร์สก็เห็นได้) มีไว้กันบอท/คนแปลกหน้ายิง endpoint
+// เล่นๆ เท่านั้น — ต่อให้หลุดไป ผลคือเขียนทับ data.json ได้ (กู้คืนได้จากประวัติ) ไม่ใช่สิทธิ์เข้าถึง GitHub จริง
+const PUBLISH_WORKER_URL = 'https://smiv-plus-publish.habusaya.workers.dev';
+const PUBLISH_SITE_KEY = 'gBi6PVlhZA9QuXxcYo1z0CoIOgbczFwc';
 
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
-  let token = getGithubToken();
-  if (!token) {
-    token = prompt('วาง GitHub token ของคุณ (fine-grained, สิทธิ์ Contents: Read and write เฉพาะ repo smiv_plus)\nจะถูกจำไว้ในเครื่อง/เบราว์เซอร์นี้ถาวร ครั้งต่อไปกดปุ่มแล้วอัปโหลดได้เลยไม่ถามซ้ำ:');
-    if (!token) return;
-    localStorage.setItem(GH_TOKEN_KEY, token.trim());
-    token = token.trim();
-  }
-
-  statusEl.textContent = 'กำลังอัปโหลดเข้า GitHub...';
+  statusEl.textContent = 'กำลังเผยแพร่...';
   statusEl.className = 'status';
   try {
     const payload = buildPayload();
-    const messageBase = `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`;
-
-    // 1) ทับ data.json หลัก (ข้อมูลล่าสุดที่ทุกคนเห็น)
-    const main = await ghGetFile(GH_PATH, token);
-    await ghPutFile(GH_PATH, payload, main.sha, token, messageBase);
-
-    // 2) เก็บสำเนาไว้เป็นประวัติ — ไฟล์แยกตามเวลาเผยแพร่ ดูย้อนหลังได้ภายหลัง
-    const snapshotPath = `docs/history/${payload.publishedAt.replace(/[:.]/g, '-')}.json`;
-    const snap = await ghGetFile(snapshotPath, token);
-    await ghPutFile(snapshotPath, payload, snap.sha, token, `history snapshot — ${messageBase}`);
-
-    // 3) อัปเดต index รายการประวัติ (ไฟล์เล็ก ไม่มี patient data เต็ม แค่ metadata)
-    const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
-    let list = Array.isArray(idx.json) ? idx.json : [];
-    list.push({
-      file: snapshotPath, publishedAt: payload.publishedAt,
-      patientCount: payload.patients.length, fiscalYear: payload.settings.current_fiscal_year_be || null,
+    const res = await fetch(PUBLISH_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+      body: JSON.stringify(payload),
     });
-    if (list.length > GH_HISTORY_KEEP) list = list.slice(list.length - GH_HISTORY_KEEP);
-    await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `update history index (${list.length} รายการ)`);
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
 
     markPublished();
-    statusEl.textContent = '✅ เผยแพร่เข้า GitHub สำเร็จ (บันทึกประวัติด้วย) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที';
+    statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที`;
     statusEl.className = 'status ok';
   } catch (err) {
-    const isAuthError = err.status === 401 || err.status === 403;
-    statusEl.textContent = '❌ ล้มเหลว: ' + err.message + (isAuthError
-      ? ' — token ไม่ถูกต้อง/หมดอายุ/ไม่มีสิทธิ์ ต้องใส่ใหม่ครั้งถัดไป'
-      : ' (ลองกดเผยแพร่ใหม่อีกครั้ง — token ยังใช้ได้อยู่)');
+    statusEl.textContent = '❌ ล้มเหลว: ' + err.message;
     statusEl.className = 'status error';
-    if (isAuthError) localStorage.removeItem(GH_TOKEN_KEY);
   }
 }
 

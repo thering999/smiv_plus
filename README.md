@@ -3,7 +3,22 @@
 ระบบรายงาน "ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) ในเขตสุขภาพเข้าถึงบริการได้รับการดูแลต่อเนื่องและไม่ก่อความรุนแรงซ้ำ"
 ตามรายงานมาตรฐาน HDC (Health Data Center) — นำเข้าข้อมูลจาก Excel (`exchange_file.xlsx` ชีต `Data`) แล้วแสดงตาราง สรุปรายอำเภอ/รวม
 
-## Stack
+## ระบบหลักที่ใช้งานจริง — Static site บน GitHub Pages (ไม่มี server/DB)
+
+**เว็บไซต์**: https://thering999.github.io/smiv_plus/
+
+ทำงานทั้งหมดในเบราว์เซอร์ (vanilla JS + SheetJS + Chart.js, โฟลเดอร์ `docs/`) อ่านข้อมูลจาก `docs/data.json`
+ซึ่งเป็นแหล่งข้อมูลกลางที่ทุกคนเห็นร่วมกัน — ไม่ต้องรัน server/DB ทิ้งไว้ ไม่มีค่าใช้จ่าย
+
+**อัปโหลด Excel → เผยแพร่**: กดปุ่ม "🚀 เผยแพร่เข้า GitHub อัตโนมัติ" ในหน้าเว็บ ข้อมูลจะถูกส่งไปให้
+Cloudflare Worker (`worker/index.js`, endpoint `https://smiv-plus-publish.habusaya.workers.dev`) เขียนทับ
+`docs/data.json` ใน repo นี้ให้อัตโนมัติ พร้อมเก็บสำเนาไว้เป็นประวัติที่ `docs/history/` (ดูย้อนหลังได้จากปุ่ม
+"📜 ประวัติการนำเข้า" ในหน้าเว็บ) — Worker ถือ GitHub token จริงไว้ฝั่งเซิร์ฟเวอร์ ไม่เคยอยู่ในโค้ดที่เผยแพร่
+(รายละเอียด/การตั้งค่า secret อยู่ใน `credentials.local.txt`, ไม่ได้ commit เข้า git)
+
+ระบบ PHP + PostgreSQL ด้านล่างนี้เป็นเวอร์ชันเก่า/สำรอง (เคย deploy บน Render) ไม่ใช่ระบบหลักที่ใช้งานอยู่แล้ว
+
+## Stack (เวอร์ชัน PHP — legacy/สำรอง)
 
 PHP 8.2 (Apache) + PostgreSQL 16 + PhpSpreadsheet, Docker Compose
 

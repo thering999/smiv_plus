@@ -64,7 +64,7 @@
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
   <p id="githubPublishStatus" class="status"></p>
-  <p class="note">🚀 = อัปโหลดตรงเข้า GitHub ทันที ต้องใส่ personal access token ของคุณเอง <strong>ครั้งแรกครั้งเดียว</strong> (เก็บถาวรใน localStorage ของเบราว์เซอร์/เครื่องนี้ ครั้งต่อไปกดแล้วอัปโหลดเลยไม่ถามซ้ำ — token ไม่ถูก commit เข้า git และไม่อยู่ในซอร์สโค้ด) — สร้างที่ <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a> เลือก Repository access = <code>smiv_plus</code> เท่านั้น, Permissions → Contents = <strong>Read and write</strong>
+  <p class="note">🚀 = อัปโหลดตรงเข้า GitHub ทันที ไม่ต้องถาม token เลย (ระบบส่งข้อมูลผ่านตัวกลาง Cloudflare Worker ที่เก็บ token จริงไว้ฝั่งเซิร์ฟเวอร์ ไม่เคยอยู่ในเบราว์เซอร์หรือซอร์สโค้ดที่เผยแพร่)
   </p>
   <div id="publishHelper" class="card" hidden style="background:#e6f4ea;border-color:var(--success);margin-top:10px">
     <strong>ขั้นตอนถัดไป — ทำให้ทุกคนเห็นข้อมูลนี้ (data.json ดาวน์โหลดแล้ว):</strong>
