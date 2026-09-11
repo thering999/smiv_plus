@@ -99,6 +99,41 @@ test('buildYearlyTrend: นับจำนวนผู้ป่วยใหม�
   assert.equal(JSON.stringify(trend.newPatients), JSON.stringify([2, 1]));
 });
 
+test('analyzeArea: ไม่มีข้อมูลประชากร (H=0) ต้องแจ้งเตือน no_population และไม่แจ้ง low_access ซ้อน (E คำนวณไม่ได้อยู่แล้ว)', () => {
+  const findings = engine.analyzeArea({ d: 10, e: 0, h: 0, repeat_violence_count: 0, zero_followup: 0, missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0 });
+  const categories = findings.map(f => f.category);
+  assert.ok(categories.includes('no_population'));
+  assert.ok(!categories.includes('low_access')); // ตั้งใจ skip เพราะ E ยังคำนวณไม่ได้จริงเมื่อไม่มี H
+});
+
+test('analyzeArea: E ต่ำกว่าเป้า 40% (มี H แล้ว) ต้องแจ้งเตือน low_access', () => {
+  const findings = engine.analyzeArea({ d: 10, e: 39.9, h: 1000, repeat_violence_count: 0, zero_followup: 0, missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0 });
+  assert.ok(findings.some(f => f.category === 'low_access'));
+});
+
+test('analyzeArea: อัตราก่อความรุนแรงซ้ำเกิน 15% ต้องแจ้งเตือน high_repeat', () => {
+  const findings = engine.analyzeArea({ d: 100, e: 50, h: 1000, repeat_violence_count: 16, zero_followup: 0, missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0 });
+  assert.ok(findings.some(f => f.category === 'high_repeat'));
+});
+
+test('analyzeArea: ไม่มีปัญหาเลย ต้องคืนสถานะ ok', () => {
+  const findings = engine.analyzeArea({ d: 100, e: 50, h: 1000, repeat_violence_count: 0, zero_followup: 0, missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0 });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].category, 'ok');
+});
+
+test('countFindingsByCategory: นับพื้นที่ที่พบปัญหาแต่ละประเภท (นับพื้นที่ ไม่ใช่นับ finding ซ้ำในพื้นที่เดียว)', () => {
+  const analysisList = [
+    { area: {}, findings: [{ category: 'high_repeat' }, { category: 'data_quality' }] },
+    { area: {}, findings: [{ category: 'high_repeat' }] },
+    { area: {}, findings: [{ category: 'ok' }] },
+  ];
+  const counts = engine.countFindingsByCategory(analysisList);
+  assert.equal(counts.high_repeat, 2);
+  assert.equal(counts.data_quality, 1);
+  assert.equal(counts.ok, undefined); // ok ไม่อยู่ใน FINDING_CATEGORY_LABELS จึงไม่ถูกนับ
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
