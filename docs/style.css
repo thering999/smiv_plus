@@ -61,6 +61,28 @@ table.report-table tbody tr:hover{background:#f7fafc}
 .pop-input{width:110px;padding:4px 6px}
 footer{text-align:center;color:#6b7280;font-size:.85em;padding:24px}
 
+@media (max-width: 640px){
+  header.topbar{padding:10px 12px}
+  header.topbar .brand{font-size:1em}
+  .nav{width:100%;justify-content:flex-start}
+  .nav-btn{padding:7px 10px;font-size:.82em}
+  main{padding:10px}
+  h1{font-size:1.1em}
+  h2{font-size:1.05em;margin-top:22px}
+  .card{padding:12px}
+  .filter-bar{flex-direction:column;align-items:stretch;gap:8px}
+  .filter-bar > *{width:100%}
+  .btn,.btn-outline,.btn-danger{width:100%;text-align:center;padding:11px 14px;margin:0 0 6px}
+  p > .btn,p > .btn-outline,p > .btn-danger{width:auto;display:block}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .kpi-value{font-size:1.3em}
+  .chart-grid{grid-template-columns:1fr}
+  .chart-box[style*="grid-column"]{grid-column:auto}
+  table.report-table{font-size:.78em}
+  table.report-table th,table.report-table td{padding:4px 6px}
+  .gate-box{padding:20px}
+}
+
 @media print{
   header.topbar,.nav,.filter-bar,.card,#gateOverlay,#unpublishedBanner,#historyViewBanner,.btn,footer{display:none !important}
   body{background:#fff}

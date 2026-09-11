@@ -3,7 +3,7 @@
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend } = window.smivEngine;
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -322,6 +322,22 @@ function renderCharts(report, totals, level, hasPop) {
   drawChart('chartYearlyTrend', {
     type: 'bar',
     data: { labels: yearly.years.map(y => 'ปีงบ ' + y), datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: yearly.newPatients, backgroundColor: '#2c6e91' }] },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } },
+  });
+
+  const byAmpur = buildYearlyTrendByAmpur();
+  const ampurColors = ['#2c6e91', '#c0392b', '#1e7e34', '#e0a63c', '#8e44ad', '#16a085', '#d35400', '#7f8c8d'];
+  drawChart('chartYearlyTrendByAmpur', {
+    type: 'line',
+    data: {
+      labels: byAmpur.years.map(y => 'ปีงบ ' + y),
+      datasets: byAmpur.series.map((s, i) => ({
+        label: s.label, data: s.data,
+        borderColor: ampurColors[i % ampurColors.length],
+        backgroundColor: ampurColors[i % ampurColors.length],
+        tension: 0.2, fill: false,
+      })),
+    },
     options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
 }
