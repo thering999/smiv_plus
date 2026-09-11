@@ -88,6 +88,7 @@ function renderStoredFileInfo() {
 
 // ---------- Upload ----------
 async function handleUpload(file) {
+  if (viewingHistory) { await exitHistoryView(); }
   setStatus('กำลังอ่านไฟล์...', '');
   try {
     const wb = await readWorkbook(file);
@@ -459,10 +460,36 @@ function markPublished() {
 const GH_OWNER = 'thering999';
 const GH_REPO = 'smiv_plus';
 const GH_PATH = 'docs/data.json';
+const GH_HISTORY_INDEX_PATH = 'docs/history/index.json';
+const GH_HISTORY_KEEP = 30; // เก็บย้อนหลังล่าสุดกี่ครั้ง กันไฟล์ index บวมไม่จำกัด
 const GH_TOKEN_KEY = 'smiv_gh_token';
 
 function getGithubToken() {
   return localStorage.getItem(GH_TOKEN_KEY) || '';
+}
+
+async function ghGetFile(path, token) {
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+  });
+  if (res.status === 404) return { sha: null, json: null };
+  if (!res.ok) throw new Error(`อ่านไฟล์ ${path} ไม่สำเร็จ (${res.status})`);
+  const j = await res.json();
+  const text = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))));
+  return { sha: j.sha, json: JSON.parse(text) };
+}
+
+async function ghPutFile(path, obj, sha, token, message) {
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, content, sha: sha || undefined }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `บันทึก ${path} ไม่สำเร็จ (${res.status})`);
+  }
 }
 
 async function publishToGithub() {
@@ -479,36 +506,92 @@ async function publishToGithub() {
   statusEl.className = 'status';
   try {
     const payload = buildPayload();
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    const messageBase = `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`;
 
-    // ต้องมี sha ของไฟล์เดิมถ้ามีอยู่แล้ว ไม่งั้น GitHub API จะปฏิเสธการทับ
-    let sha = null;
-    const getRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`, {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
-    });
-    if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
-    else if (getRes.status !== 404) throw new Error(`อ่านไฟล์เดิมไม่สำเร็จ (${getRes.status})`);
+    // 1) ทับ data.json หลัก (ข้อมูลล่าสุดที่ทุกคนเห็น)
+    const main = await ghGetFile(GH_PATH, token);
+    await ghPutFile(GH_PATH, payload, main.sha, token, messageBase);
 
-    const putRes = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`, {
-      method: 'PUT',
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: `publish data.json (${payload.patients.length} คน) — ${new Date().toLocaleString('th-TH')}`,
-        content, sha: sha || undefined,
-      }),
+    // 2) เก็บสำเนาไว้เป็นประวัติ — ไฟล์แยกตามเวลาเผยแพร่ ดูย้อนหลังได้ภายหลัง
+    const snapshotPath = `docs/history/${payload.publishedAt.replace(/[:.]/g, '-')}.json`;
+    const snap = await ghGetFile(snapshotPath, token);
+    await ghPutFile(snapshotPath, payload, snap.sha, token, `history snapshot — ${messageBase}`);
+
+    // 3) อัปเดต index รายการประวัติ (ไฟล์เล็ก ไม่มี patient data เต็ม แค่ metadata)
+    const idx = await ghGetFile(GH_HISTORY_INDEX_PATH, token);
+    let list = Array.isArray(idx.json) ? idx.json : [];
+    list.push({
+      file: snapshotPath, publishedAt: payload.publishedAt,
+      patientCount: payload.patients.length, fiscalYear: payload.settings.current_fiscal_year_be || null,
     });
-    if (!putRes.ok) {
-      const err = await putRes.json().catch(() => ({}));
-      throw new Error(err.message || `อัปโหลดไม่สำเร็จ (${putRes.status})`);
-    }
+    if (list.length > GH_HISTORY_KEEP) list = list.slice(list.length - GH_HISTORY_KEEP);
+    await ghPutFile(GH_HISTORY_INDEX_PATH, list, idx.sha, token, `update history index (${list.length} รายการ)`);
+
     markPublished();
-    statusEl.textContent = '✅ เผยแพร่เข้า GitHub สำเร็จ — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที';
+    statusEl.textContent = '✅ เผยแพร่เข้า GitHub สำเร็จ (บันทึกประวัติด้วย) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที';
     statusEl.className = 'status ok';
   } catch (err) {
     statusEl.textContent = '❌ ล้มเหลว: ' + err.message + ' (เช็คว่า token ยังไม่หมดอายุ/มีสิทธิ์ Contents:write)';
     statusEl.className = 'status error';
     localStorage.removeItem(GH_TOKEN_KEY);
   }
+}
+
+// ---------- ดูประวัติการนำเข้าย้อนหลัง (อ่านอย่างเดียว ไม่ต้อง token) ----------
+let viewingHistory = false;
+
+async function loadHistoryList() {
+  const box = document.getElementById('historyList');
+  box.innerHTML = '<p class="note">กำลังโหลด...</p>';
+  try {
+    const res = await fetch('./history/index.json', { cache: 'no-store' });
+    if (!res.ok) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
+    const list = await res.json();
+    if (!list.length) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
+    const rows = list.slice().reverse().map(item => `
+      <tr>
+        <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
+        <td>${item.fiscalYear || '-'}</td>
+        <td>${item.patientCount.toLocaleString('th-TH')}</td>
+        <td><button class="btn btn-outline" data-history-file="${escapeHtml(item.file)}">👁️ ดูข้อมูลนี้</button></td>
+      </tr>`).join('');
+    box.innerHTML = `<div class="table-scroll"><table class="report-table">
+      <thead><tr><th>เผยแพร่เมื่อ</th><th>ปีงบ</th><th>จำนวนผู้ป่วย</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+    box.querySelectorAll('[data-history-file]').forEach(btn => {
+      btn.addEventListener('click', () => loadHistorySnapshot(btn.getAttribute('data-history-file')));
+    });
+  } catch (e) {
+    box.innerHTML = '<p class="note">โหลดประวัติไม่สำเร็จ: ' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+async function loadHistorySnapshot(file) {
+  try {
+    const res = await fetch('./' + file.replace(/^docs\//, ''), { cache: 'no-store' });
+    if (!res.ok) throw new Error('อ่านไฟล์ไม่สำเร็จ (' + res.status + ')');
+    const data = await res.json();
+    state.patients = data.patients || [];
+    state.population = data.population || {};
+    state.settings = { ...state.settings, ...(data.settings || {}) };
+    viewingHistory = true;
+    const banner = document.getElementById('historyViewBanner');
+    banner.hidden = false;
+    banner.querySelector('span').textContent = `กำลังดูข้อมูลย้อนหลัง ณ วันที่เผยแพร่ ${new Date(data.publishedAt).toLocaleString('th-TH')} (ห้ามแก้ไข/เผยแพร่ทับจากมุมมองนี้)`;
+    $('#historyPanel').hidden = true;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    alert('โหลดข้อมูลย้อนหลังไม่สำเร็จ: ' + e.message);
+  }
+}
+
+async function exitHistoryView() {
+  viewingHistory = false;
+  document.getElementById('historyViewBanner').hidden = true;
+  const publishedOk = await loadPublished();
+  if (!publishedOk) loadLocal();
+  render();
 }
 
 function clearAllData() {
@@ -559,6 +642,12 @@ async function init() {
   $('#toggleSettingsEditor').addEventListener('click', () => { $('#settingsEditor').hidden = !$('#settingsEditor').hidden; });
   $('#clearDataBtn').addEventListener('click', clearAllData);
   $('#saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
+  $('#toggleHistoryPanel').addEventListener('click', () => {
+    const panel = $('#historyPanel');
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) loadHistoryList();
+  });
+  $('#exitHistoryViewBtn').addEventListener('click', e => { e.preventDefault(); exitHistoryView(); });
 }
 
 document.addEventListener('DOMContentLoaded', init);

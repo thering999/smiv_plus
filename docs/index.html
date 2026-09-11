@@ -44,6 +44,9 @@
 <p class="note">ระบบนี้ทำงานทั้งหมดใน browser (ไม่มี server/ฐานข้อมูล) — อัปโหลดไฟล์ Excel แล้วระบบจะเผยแพร่เข้า GitHub ให้ทุกคนเห็นทันทีอัตโนมัติ (ต้องใส่ token ครั้งแรกครั้งเดียว)</p>
 
 <div id="unpublishedBanner" class="alert" hidden>⚠️ มีข้อมูลที่ยังไม่ได้เผยแพร่ — ถ้าปิดหน้านี้ไปคนอื่นจะยังไม่เห็นข้อมูลล่าสุด กด "เผยแพร่ข้อมูล" ด้านล่างแล้วนำไฟล์ไป commit เข้า repo</div>
+<div id="historyViewBanner" class="alert" hidden style="background:#eaf1f5;color:var(--primary-dark);border-color:var(--primary)">
+  <span></span> — <a href="#" id="exitHistoryViewBtn">กลับสู่ข้อมูลล่าสุด</a>
+</div>
 
 <div class="card">
   <h2 style="margin-top:0;border:none">นำเข้าข้อมูล Excel</h2>
@@ -56,6 +59,7 @@
     <button class="btn btn-outline" id="publishBtn">📤 ดาวน์โหลด data.json (ทำเอง)</button>
     <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
+    <button class="btn btn-outline" id="toggleHistoryPanel">📜 ประวัติการนำเข้า</button>
     <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
@@ -87,6 +91,10 @@
     <label style="display:block;margin-bottom:8px">ปีงบประมาณปัจจุบัน (พ.ศ.)<br><input type="number" id="setCurrentFy" style="width:100%;padding:6px"></label>
     <button class="btn" id="saveSettingsBtn">บันทึกการตั้งค่า</button>
     <p class="note" style="margin-top:8px">"ก่อความรุนแรงซ้ำ" คำนวณอัตโนมัติจากจำนวนรหัส b03x (1B030-1B033) ที่ลงทะเบียนมากกว่า 1 ครั้ง — ไม่มีค่าตั้งค่าให้ปรับ (นิยามตามเอกสาร HDC)</p>
+  </div>
+  <div id="historyPanel" hidden style="margin-top:14px">
+    <p class="note">ทุกครั้งที่เผยแพร่เข้า GitHub ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">30</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน</p>
+    <div id="historyList"></div>
   </div>
 </div>
 
