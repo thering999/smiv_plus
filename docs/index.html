@@ -34,6 +34,7 @@
   <nav class="nav">
     <button type="button" class="nav-btn active" id="navDashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button type="button" class="nav-btn" id="navReference" onclick="showTab('reference')">📖 คู่มือรหัส</button>
+    <button type="button" class="nav-btn" id="navLogout" onclick="sessionStorage.removeItem('smiv_gate_ok'); location.reload()">🔒 ออกจากระบบ</button>
   </nav>
   <div id="publishedAt" class="note" style="color:#fff"></div>
 </header>
