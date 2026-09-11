@@ -15,6 +15,35 @@ function markDirty() {
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 
+// ---------- แจ้งเตือนเบราว์เซอร์ (Desktop Notification) เมื่อพบผู้ป่วยความสำคัญสูง ----------
+let lastNotifiedHighCount = -1;
+function notificationSupported() {
+  return typeof Notification !== 'undefined';
+}
+function updateNotifyButton() {
+  const btn = $('#enableNotifyBtn');
+  if (!btn) return;
+  if (!notificationSupported() || Notification.permission === 'granted' || Notification.permission === 'denied') {
+    btn.hidden = true;
+  } else {
+    btn.hidden = false;
+  }
+}
+function requestNotifyPermission() {
+  if (!notificationSupported()) return;
+  Notification.requestPermission().then(updateNotifyButton);
+}
+function maybeNotifyRisk(highCount) {
+  if (!notificationSupported() || Notification.permission !== 'granted') return;
+  if (highCount > 0 && highCount !== lastNotifiedHighCount) {
+    new Notification('SMI-V Plus — แจ้งเตือนความเสี่ยง', {
+      body: `พบผู้ป่วยความสำคัญสูง (ก่อความรุนแรงซ้ำ) ${highCount.toLocaleString('th-TH')} คน ต้องติดตามด่วน`,
+      tag: 'smiv-risk-alert',
+    });
+  }
+  lastNotifiedHighCount = highCount;
+}
+
 function saveLocal() {
   try { localStorage.setItem(LS_KEY, JSON.stringify({ patients: state.patients, population: state.population, settings: state.settings })); } catch (e) {}
 }
@@ -472,6 +501,7 @@ function renderProblemPatients(fy, level, areaFilter) {
   } else {
     alertBanner.hidden = true;
   }
+  maybeNotifyRisk(priorityCount['สูง']);
 
   drawChart('chartProblemPriority', {
     type: 'doughnut',
@@ -726,6 +756,9 @@ async function init() {
   $('#riskAlertBanner').addEventListener('click', () => {
     $('#problemPatientsBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+  updateNotifyButton();
+  const notifyBtn = $('#enableNotifyBtn');
+  if (notifyBtn) notifyBtn.addEventListener('click', requestNotifyPermission);
 }
 
 document.addEventListener('DOMContentLoaded', init);
