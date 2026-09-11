@@ -30,6 +30,8 @@ function loadLocal() {
   } catch (e) { return false; }
 }
 
+let lastPublishedCount = 0;
+
 async function loadPublished() {
   try {
     const res = await fetch('./data.json', { cache: 'no-store' });
@@ -39,6 +41,7 @@ async function loadPublished() {
     state.patients = data.patients;
     state.population = data.population || {};
     state.settings = { ...state.settings, ...(data.settings || {}) };
+    lastPublishedCount = data.patients.length;
     $('#publishedAt').textContent = data.publishedAt ? `เผยแพร่ล่าสุด: ${new Date(data.publishedAt).toLocaleString('th-TH')}` : '';
     return true;
   } catch (e) { return false; }
@@ -518,6 +521,21 @@ const PUBLISH_SITE_KEY = 'gBi6PVlhZA9QuXxcYo1z0CoIOgbczFwc';
 
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
+
+  const newCount = state.patients.length;
+  if (lastPublishedCount > 0 && newCount < lastPublishedCount * 0.8) {
+    const pctDrop = (100 * (1 - newCount / lastPublishedCount)).toFixed(0);
+    const ok = confirm(
+      `⚠️ จำนวนผู้ป่วยลดลงผิดปกติ: จากเดิม ${lastPublishedCount.toLocaleString('th-TH')} คน เหลือ ${newCount.toLocaleString('th-TH')} คน (ลดลง ${pctDrop}%)\n\n` +
+      `อาจเกิดจากอัปโหลดไฟล์ผิด/ไฟล์ไม่ครบ — ต้องการเผยแพร่ทับข้อมูลเดิมจริงหรือไม่?\n(กด "ยกเลิก" เพื่อหยุดและตรวจสอบไฟล์ก่อน)`
+    );
+    if (!ok) {
+      statusEl.textContent = '⏸️ ยกเลิกการเผยแพร่ — ตรวจสอบไฟล์ที่อัปโหลดอีกครั้ง';
+      statusEl.className = 'status';
+      return;
+    }
+  }
+
   statusEl.textContent = 'กำลังเผยแพร่...';
   statusEl.className = 'status';
   try {
@@ -531,6 +549,7 @@ async function publishToGithub() {
     if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
 
     markPublished();
+    lastPublishedCount = payload.patients.length;
     statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที`;
     statusEl.className = 'status ok';
   } catch (err) {
@@ -555,13 +574,19 @@ async function loadHistoryList() {
         <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
         <td>${item.fiscalYear || '-'}</td>
         <td>${item.patientCount.toLocaleString('th-TH')}</td>
-        <td><button class="btn btn-outline" data-history-file="${escapeHtml(item.file)}">👁️ ดูข้อมูลนี้</button></td>
+        <td>
+          <button class="btn btn-outline" data-history-file="${escapeHtml(item.file)}">👁️ ดูข้อมูลนี้</button>
+          <button class="btn btn-danger" data-restore-file="${escapeHtml(item.file)}">↩️ กู้คืนเป็นข้อมูลนี้</button>
+        </td>
       </tr>`).join('');
     box.innerHTML = `<div class="table-scroll"><table class="report-table">
       <thead><tr><th>เผยแพร่เมื่อ</th><th>ปีงบ</th><th>จำนวนผู้ป่วย</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
     box.querySelectorAll('[data-history-file]').forEach(btn => {
       btn.addEventListener('click', () => loadHistorySnapshot(btn.getAttribute('data-history-file')));
+    });
+    box.querySelectorAll('[data-restore-file]').forEach(btn => {
+      btn.addEventListener('click', () => restoreHistorySnapshot(btn.getAttribute('data-restore-file')));
     });
   } catch (e) {
     box.innerHTML = '<p class="note">โหลดประวัติไม่สำเร็จ: ' + escapeHtml(e.message) + '</p>';
@@ -585,6 +610,28 @@ async function loadHistorySnapshot(file) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
     alert('โหลดข้อมูลย้อนหลังไม่สำเร็จ: ' + e.message);
+  }
+}
+
+async function restoreHistorySnapshot(file) {
+  if (!confirm('กู้คืนข้อมูลจากประวัตินี้ให้กลายเป็นข้อมูลปัจจุบัน (ทับข้อมูลล่าสุดที่ทุกคนเห็นอยู่ตอนนี้)?\nไม่สามารถยกเลิกภายหลังได้ (แต่จะถูกบันทึกเป็นประวัติใหม่ กู้คืนย้อนกลับได้อีกถ้าจำเป็น)')) return;
+  try {
+    const res = await fetch('./' + file.replace(/^docs\//, ''), { cache: 'no-store' });
+    if (!res.ok) throw new Error('อ่านไฟล์ไม่สำเร็จ (' + res.status + ')');
+    const data = await res.json();
+    state.patients = data.patients || [];
+    state.population = data.population || {};
+    state.settings = { ...state.settings, ...(data.settings || {}) };
+    viewingHistory = false;
+    document.getElementById('historyViewBanner').hidden = true;
+    saveLocal();
+    markDirty();
+    render();
+    await publishToGithub();
+    $('#historyPanel').hidden = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    alert('กู้คืนไม่สำเร็จ: ' + e.message);
   }
 }
 
