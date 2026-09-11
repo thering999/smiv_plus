@@ -1070,6 +1070,7 @@ async function loadHistoryList() {
     if (!res.ok) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
     const list = await res.json();
     if (!list.length) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
+    const isAdmin = sessionStorage.getItem('smiv_gate_role') !== 'viewer';
     const rows = list.slice().reverse().map(item => `
       <tr>
         <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
@@ -1077,8 +1078,8 @@ async function loadHistoryList() {
         <td>${item.patientCount.toLocaleString('th-TH')}</td>
         <td>
           <button class="btn btn-outline" data-history-file="${escapeHtml(item.file)}">👁️ ดูข้อมูลนี้</button>
-          <button class="btn btn-danger" data-restore-file="${escapeHtml(item.file)}">↩️ กู้คืนเป็นข้อมูลนี้</button>
-          <button class="btn btn-outline" data-delete-file="${escapeHtml(item.file)}" style="border-color:var(--danger);color:var(--danger)">🗑️ ลบรายการนี้</button>
+          ${isAdmin ? `<button class="btn btn-danger" data-restore-file="${escapeHtml(item.file)}">↩️ กู้คืนเป็นข้อมูลนี้</button>
+          <button class="btn btn-outline" data-delete-file="${escapeHtml(item.file)}" style="border-color:var(--danger);color:var(--danger)">🗑️ ลบรายการนี้</button>` : ''}
         </td>
       </tr>`).join('');
     box.innerHTML = `<div class="table-scroll"><table class="report-table">

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260911g">
+<link rel="stylesheet" href="style.css?v=20260911h">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
@@ -56,6 +56,7 @@
 </div>
 
 <p style="margin:0 0 14px">
+  <button class="btn btn-outline" id="toggleHistoryPanel">📜 ประวัติการนำเข้า</button>
   <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
   <button class="btn btn-outline" id="printExecSummaryBtn">🖨️ พิมพ์สรุปผู้บริหาร (1 หน้า)</button>
   <button class="btn btn-outline" id="downloadPdfBtn">📄 ดาวน์โหลด PDF สรุปผู้บริหาร</button>
@@ -72,7 +73,6 @@
     <button class="btn btn-outline" id="publishBtn">📤 ดาวน์โหลด data.json (ทำเอง)</button>
     <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
-    <button class="btn btn-outline" id="toggleHistoryPanel">📜 ประวัติการนำเข้า</button>
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
   <p id="githubPublishStatus" class="status"></p>
@@ -105,10 +105,12 @@
     <button class="btn" id="saveSettingsBtn">บันทึกการตั้งค่า</button>
     <p class="note" style="margin-top:8px">"ก่อความรุนแรงซ้ำ" คำนวณอัตโนมัติจากจำนวนรหัส b03x (1B030-1B033) ที่ลงทะเบียนมากกว่า 1 ครั้ง — ไม่มีค่าตั้งค่าให้ปรับ (นิยามตามเอกสาร HDC)</p>
   </div>
-  <div id="historyPanel" hidden style="margin-top:14px">
-    <p class="note">ทุกครั้งที่เผยแพร่เข้า GitHub ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">30</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน</p>
-    <div id="historyList"></div>
-  </div>
+</div>
+
+<div class="card" id="historyPanel" hidden>
+  <h2 style="margin-top:0;border:none;padding-left:0">📜 ประวัติการนำเข้า</h2>
+  <p class="note">ทุกครั้งที่เผยแพร่เข้า GitHub ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">15</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน</p>
+  <div id="historyList"></div>
 </div>
 
 <form class="filter-bar card" onsubmit="return false">
@@ -491,7 +493,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260911g"></script>
-<script src="ui.js?v=20260911g"></script>
+<script src="app.js?v=20260911h"></script>
+<script src="ui.js?v=20260911h"></script>
 </body>
 </html>
