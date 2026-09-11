@@ -84,7 +84,7 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:24px}
 }
 
 @media print{
-  header.topbar,.nav,.filter-bar,.card,#gateOverlay,#unpublishedBanner,#historyViewBanner,.btn,footer{display:none !important}
+  header.topbar,.nav,.filter-bar,.card,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,.btn,footer{display:none !important}
   body{background:#fff}
   main{padding:0;max-width:none}
   .chart-box,.analysis-card{break-inside:avoid;box-shadow:none;border:1px solid #ccc}
