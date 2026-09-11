@@ -1,4 +1,5 @@
 /* SMI-V Plus — UI wiring (upload, render, charts, export, publish) */
+/* หลังแก้ไฟล์นี้หรือ app.js ต้องขยับเลข v= ใน <script src> ของ index.html ด้วย ไม่งั้นเบราว์เซอร์ผู้ใช้จะค้าง JS เก่า */
 'use strict';
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
