@@ -45,9 +45,11 @@ h2{color:var(--primary-dark);font-weight:700;margin:36px 0 14px;padding-left:12p
 .kpi-value{font-size:1.8em;font-weight:700;margin:6px 0 2px}
 .kpi-target{font-size:.8em;color:#6b7280}
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:18px;margin-bottom:24px}
-.chart-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s;position:relative}
 .chart-box:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
-.chart-box h3{margin:0 0 12px;font-size:1em;font-weight:600;color:var(--primary-dark)}
+.chart-box h3{margin:0 12px 12px 0;font-size:1em;font-weight:600;color:var(--primary-dark)}
+.chart-download-btn{position:absolute;top:14px;right:14px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:.75em;cursor:pointer;color:var(--primary);font-family:inherit;transition:background .15s}
+.chart-download-btn:hover{background:#eaf1f5}
 .analysis-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px;transition:box-shadow .2s}
 .analysis-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .analysis-card h3{margin:0 0 10px}
@@ -94,9 +96,16 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
 }
 
 @media print{
-  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,.btn,footer{display:none !important}
+  @page{margin:12mm}
+  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
   body{background:#fff}
-  main{padding:0;max-width:none}
-  .chart-box,.analysis-card{break-inside:avoid;box-shadow:none;border:1px solid #ccc}
-  table.report-table{font-size:11px}
+  main{padding:0;max-width:100%}
+  h2{page-break-after:avoid;break-after:avoid}
+  .card,.kpi-grid{page-break-inside:avoid;break-inside:avoid}
+  .chart-grid{display:block !important}
+  .chart-box{page-break-inside:avoid;break-inside:avoid;box-shadow:none;border:1px solid #ccc;width:100% !important;max-width:100%;margin-bottom:14px}
+  .chart-box canvas{max-width:100% !important;height:auto !important}
+  .analysis-card{page-break-inside:avoid;break-inside:avoid;box-shadow:none;border:1px solid #ccc}
+  .table-scroll{overflow:visible}
+  table.report-table{font-size:10px;width:100%}
 }

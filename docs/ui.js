@@ -278,6 +278,26 @@ function drawChart(canvasId, config) {
   if (!canvas) return;
   if (state.charts[canvasId]) state.charts[canvasId].destroy();
   state.charts[canvasId] = new Chart(canvas, config);
+  addChartDownloadButton(canvas);
+}
+
+function addChartDownloadButton(canvas) {
+  const box = canvas.closest('.chart-box');
+  if (!box || box.querySelector('.chart-download-btn')) return;
+  const btn = document.createElement('button');
+  btn.className = 'chart-download-btn';
+  btn.type = 'button';
+  btn.textContent = '⬇ ภาพ';
+  btn.title = 'ดาวน์โหลดกราฟนี้เป็นรูปภาพ (PNG)';
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const title = box.querySelector('h3')?.textContent.trim().replace(/[\\/:*?"<>|]/g, '') || canvas.id;
+    const url = canvas.toDataURL('image/png', 1.0);
+    const a = document.createElement('a');
+    a.href = url; a.download = `smiv_${title}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  box.appendChild(btn);
 }
 
 function renderCharts(report, totals, level, hasPop) {
