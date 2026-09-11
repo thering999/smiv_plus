@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 </head>
 <body>
 <div id="gateOverlay" class="gate-overlay">
@@ -37,7 +39,7 @@
   <nav class="nav">
     <button type="button" class="nav-btn active" id="navDashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button type="button" class="nav-btn" id="navReference" onclick="showTab('reference')">📖 คู่มือรหัส</button>
-    <button type="button" class="nav-btn" id="navLogout" onclick="sessionStorage.removeItem('smiv_gate_ok'); location.reload()">🔒 ออกจากระบบ</button>
+    <button type="button" class="nav-btn" id="navLogout" onclick="sessionStorage.removeItem('smiv_gate_ok'); sessionStorage.removeItem('smiv_gate_role'); location.reload()">🔒 ออกจากระบบ</button>
   </nav>
   <div id="publishedAt" class="note" style="color:#fff"></div>
 </header>
@@ -67,6 +69,7 @@
     <button class="btn btn-outline" id="toggleHistoryPanel">📜 ประวัติการนำเข้า</button>
     <button class="btn btn-outline" id="printBtn" onclick="window.print()">🖨️ พิมพ์รายงาน</button>
     <button class="btn btn-outline" id="printExecSummaryBtn">🖨️ พิมพ์สรุปผู้บริหาร (1 หน้า)</button>
+    <button class="btn btn-outline" id="downloadPdfBtn">📄 ดาวน์โหลด PDF สรุปผู้บริหาร</button>
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
   <p id="githubPublishStatus" class="status"></p>
@@ -124,11 +127,14 @@
 
 <div id="dashboard" hidden>
   <div id="popWarning" class="alert" hidden>ยังไม่มีข้อมูลประชากร 15-60 ปี (H) — อัตราเข้าถึงบริการ (E) จะเป็น 0 จนกว่าจะกรอกที่ปุ่ม "ประชากร/ประมาณการณ์"</div>
-  <div id="riskAlertBanner" class="alert" hidden style="background:#fdecea;border-color:#f5c6cb;cursor:pointer">
-    🔴 <strong id="riskAlertText"></strong> — คลิกเพื่อดูรายชื่อ
+  <div id="riskAlertBanner" class="alert" hidden style="background:#fdecea;border-color:#f5c6cb">
+    🔴 <strong id="riskAlertText"></strong>
+    <a href="#" id="riskAlertViewLink" style="margin-left:6px">คลิกเพื่อดูรายชื่อ</a>
+    · <a href="#" id="riskAlertEmailLink">📧 ส่งอีเมลแจ้งเตือน</a>
   </div>
   <div id="lowEAlertBanner" class="alert" hidden style="background:#fef6e7;color:#8a5a00;border-color:#f5dca0">
     ⚠️ <strong id="lowEAlertText"></strong>
+    · <a href="#" id="lowEAlertEmailLink">📧 ส่งอีเมลแจ้งเตือน</a>
   </div>
   <button class="btn btn-outline" id="enableNotifyBtn" hidden style="margin-bottom:16px">🔔 เปิดแจ้งเตือนเบราว์เซอร์เมื่อพบผู้ป่วยเสี่ยงสูง</button>
 
@@ -421,13 +427,18 @@ function showTab(tab) {
 // คนที่เปิด dev tools ข้ามได้ทั้งด่านและ throttle นี้ — เป็นแค่กันคนกดมั่วธรรมดา)
 // เปลี่ยนรหัสผ่านได้ที่บรรทัดถัดไป แล้ว publish ใหม่
 const GATE_PASSPHRASE = 'smiv49000muk';
+const GATE_VIEWER_PASSPHRASE = 'smiv49000view'; // รหัสสำหรับคนนอกทีม — ดูได้อย่างเดียว แก้ไข/publish/ลบไม่ได้
 const GATE_MAX_ATTEMPTS = 3;
 const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 (function () {
   const overlay = document.getElementById('gateOverlay');
   const btn = document.getElementById('gateBtn');
   const errEl = document.getElementById('gateError');
-  if (sessionStorage.getItem('smiv_gate_ok') === '1') { overlay.style.display = 'none'; return; }
+  if (sessionStorage.getItem('smiv_gate_ok') === '1') {
+    overlay.style.display = 'none';
+    if (sessionStorage.getItem('smiv_gate_role') === 'viewer') document.body.classList.add('viewer-role');
+    return;
+  }
 
   function getAttempts() {
     try { return JSON.parse(localStorage.getItem('smiv_gate_attempts') || '{"count":0,"lockedUntil":0}'); }
@@ -454,9 +465,11 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
     const a = getAttempts();
     if (a.lockedUntil > Date.now()) { updateLockUi(); return; }
     const val = document.getElementById('gatePass').value;
-    if (val === GATE_PASSPHRASE) {
+    if (val === GATE_PASSPHRASE || val === GATE_VIEWER_PASSPHRASE) {
       setAttempts({ count: 0, lockedUntil: 0 });
       sessionStorage.setItem('smiv_gate_ok', '1');
+      sessionStorage.setItem('smiv_gate_role', val === GATE_VIEWER_PASSPHRASE ? 'viewer' : 'admin');
+      if (val === GATE_VIEWER_PASSPHRASE) document.body.classList.add('viewer-role');
       overlay.style.display = 'none';
     } else {
       const count = a.count + 1;
@@ -475,7 +488,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260911d"></script>
-<script src="ui.js?v=20260911d"></script>
+<script src="app.js?v=20260911e"></script>
+<script src="ui.js?v=20260911e"></script>
 </body>
 </html>

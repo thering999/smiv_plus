@@ -95,6 +95,10 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
   .gate-box{padding:20px}
 }
 
+/* โหมดดูอย่างเดียว (viewer role) — ซ่อนทุกอย่างที่แก้ไข/เผยแพร่/ลบข้อมูลได้ */
+body.viewer-role #importCard{display:none !important}
+body.viewer-role::before{content:"👁️ โหมดดูอย่างเดียว — แก้ไข/เผยแพร่ข้อมูลไม่ได้";display:block;background:#eaf1f5;color:var(--primary-dark);text-align:center;padding:6px;font-size:.85em;font-weight:600}
+
 body.printing-exec-summary > *:not(#execSummaryPrint){display:none !important}
 body.printing-exec-summary #execSummaryPrint{display:block !important}
 #execSummaryPrint h1{font-size:1.3em;margin-bottom:4px}
