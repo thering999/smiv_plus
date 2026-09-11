@@ -685,6 +685,7 @@ function buildExecSummaryContent() {
 function printExecutiveSummary() {
   buildExecSummaryContent();
   const content = $('#execSummaryPrint');
+  document.body.appendChild(content); // ต้องเป็นลูกตรงของ body ไม่งั้น CSS ".printing-exec-summary > *" จะซ่อน <main> ทับเนื้อหานี้ไปด้วย (บั๊กที่เคยเกิดจริง — พิมพ์ออกมาว่างเปล่า)
   document.body.classList.add('printing-exec-summary');
   content.hidden = false;
   window.print();
