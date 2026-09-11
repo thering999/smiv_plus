@@ -3,7 +3,7 @@
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur } = window.smivEngine;
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -369,6 +369,25 @@ function renderCharts(report, totals, level, hasPop) {
     },
     options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
+
+  const accessTrend = buildAccessRateTrend();
+  const accessTrendBox = $('#accessTrendChartBox');
+  if (accessTrend.years.length >= 1) {
+    accessTrendBox.hidden = false;
+    drawChart('chartAccessTrend', {
+      type: 'line',
+      data: {
+        labels: accessTrend.years.map(y => 'ปีงบ ' + y),
+        datasets: [
+          { label: 'อัตราเข้าถึงบริการ E (%)', data: accessTrend.ePct, borderColor: '#2c6e91', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 },
+          { label: 'เป้าหมาย 40%', data: accessTrend.years.map(() => 40), borderColor: '#c0392b', borderDash: [6, 4], pointRadius: 0, fill: false },
+        ],
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } },
+    });
+  } else {
+    accessTrendBox.hidden = true;
+  }
 }
 
 // ---------- Population editor ----------
@@ -383,11 +402,52 @@ function renderPopulationEditor() {
       <td><input type="number" min="0" value="${r.pop15_60}" data-ampur="${escapeHtml(code)}" class="pop-input"></td>
       <td>${fmt(Math.round(r.pop15_60 * state.settings.smi_prevalence_pct / 100 * state.settings.smiv_ratio_pct / 100))}</td>
     </tr>`).join('');
+
+  const copyBtn = $('#copyPopPrevYearBtn');
+  if (copyBtn) {
+    const prevFy = fy - 1;
+    const hasPrev = state.population[prevFy] && Object.values(state.population[prevFy]).some(r => r.pop15_60 > 0);
+    copyBtn.hidden = !hasPrev;
+    copyBtn.textContent = `📋 คัดลอกประชากรจากปีงบ ${prevFy}`;
+  }
+}
+
+function copyPopulationFromPreviousYear() {
+  const fy = currentFy();
+  const prevFy = fy - 1;
+  const prev = state.population[prevFy];
+  if (!prev) return;
+  if (!confirm(`คัดลอกข้อมูลประชากรจากปีงบ ${prevFy} มาเป็นค่าเริ่มต้นของปีงบ ${fy}? (ช่องที่กรอกไว้แล้วในปีนี้จะถูกทับ)`)) return;
+  if (!state.population[fy]) state.population[fy] = {};
+  for (const [code, r] of Object.entries(prev)) {
+    state.population[fy][code] = { name: r.name, pop15_60: r.pop15_60 };
+  }
+  renderPopulationEditor();
 }
 
 function savePopulationFromForm() {
   const fy = currentFy();
   if (!state.population[fy]) state.population[fy] = {};
+
+  // กันเผลอบันทึกทับเป็น 0: เช็คก่อนว่ามีอำเภอไหนเคยมีค่า H>0 แล้วจะกลายเป็น 0 ไหม
+  const zeroedOut = [];
+  $$('.pop-input').forEach(input => {
+    const code = input.dataset.ampur;
+    const oldVal = state.population[fy][code]?.pop15_60 || 0;
+    const newVal = Number(input.value) || 0;
+    if (oldVal > 0 && newVal === 0) {
+      const name = state.population[fy][code]?.name || code;
+      zeroedOut.push(name);
+    }
+  });
+  if (zeroedOut.length) {
+    const ok = confirm(
+      `⚠️ อำเภอต่อไปนี้เคยมีข้อมูลประชากรแล้ว แต่ช่องนี้ว่าง/เป็น 0 — บันทึกแล้วจะทับเป็น 0:\n\n${zeroedOut.join(', ')}\n\n` +
+      `ถ้าไม่ได้ตั้งใจแก้อำเภอเหล่านี้ ให้กด "ยกเลิก" แล้วกรอกค่าเดิมกลับก่อน หรือกด "ตกลง" เพื่อบันทึกทับเป็น 0 จริงๆ`
+    );
+    if (!ok) return;
+  }
+
   $$('.pop-input').forEach(input => {
     const code = input.dataset.ampur;
     if (!state.population[fy][code]) state.population[fy][code] = { name: code, pop15_60: 0 };
@@ -576,8 +636,24 @@ function markPublished() {
 const PUBLISH_WORKER_URL = 'https://smiv-plus-publish.habusaya.workers.dev';
 const PUBLISH_SITE_KEY = 'gBi6PVlhZA9QuXxcYo1z0CoIOgbczFwc';
 
+let publishInFlight = false;
+let lastPublishAt = 0;
+const PUBLISH_COOLDOWN_MS = 8000;
+
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
+
+  if (publishInFlight) {
+    statusEl.textContent = '⏳ กำลังเผยแพร่รอบก่อนหน้าอยู่ รอสักครู่แล้วลองใหม่';
+    statusEl.className = 'status';
+    return;
+  }
+  const sinceLast = Date.now() - lastPublishAt;
+  if (sinceLast < PUBLISH_COOLDOWN_MS) {
+    statusEl.textContent = `⏳ เพิ่งเผยแพร่ไปเมื่อครู่ กรุณารออีก ${Math.ceil((PUBLISH_COOLDOWN_MS - sinceLast) / 1000)} วินาที (กันยิง GitHub API ถี่เกินไป)`;
+    statusEl.className = 'status';
+    return;
+  }
 
   const newCount = state.patients.length;
   if (lastPublishedCount > 0 && newCount < lastPublishedCount * 0.8) {
@@ -595,6 +671,7 @@ async function publishToGithub() {
 
   statusEl.textContent = 'กำลังเผยแพร่...';
   statusEl.className = 'status';
+  publishInFlight = true;
   try {
     const payload = buildPayload();
     const res = await fetch(PUBLISH_WORKER_URL, {
@@ -607,11 +684,14 @@ async function publishToGithub() {
 
     markPublished();
     lastPublishedCount = payload.patients.length;
+    lastPublishAt = Date.now();
     statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที`;
     statusEl.className = 'status ok';
   } catch (err) {
     statusEl.textContent = '❌ ล้มเหลว: ' + err.message;
     statusEl.className = 'status error';
+  } finally {
+    publishInFlight = false;
   }
 }
 
@@ -743,6 +823,7 @@ async function init() {
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#exportIssuesBtn2').addEventListener('click', exportIssuesXlsx);
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
+  $('#copyPopPrevYearBtn').addEventListener('click', copyPopulationFromPreviousYear);
   $('#publishBtn').addEventListener('click', publishData);
   $('#publishGithubBtn').addEventListener('click', publishToGithub);
   $('#togglePopEditor').addEventListener('click', () => { $('#popEditor').hidden = !$('#popEditor').hidden; });
