@@ -42,9 +42,9 @@
 <main>
 <div id="tabDashboard">
 <h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
-<p class="note">ระบบนี้ทำงานทั้งหมดใน browser (ไม่มี server/ฐานข้อมูล) — อัปโหลดไฟล์ Excel แล้วระบบจะเผยแพร่เข้า GitHub ให้ทุกคนเห็นทันทีอัตโนมัติ (ต้องใส่ token ครั้งแรกครั้งเดียว)</p>
+<p class="note">อัปโหลดไฟล์ Excel แล้วทุกคนจะเห็นข้อมูลใหม่ทันทีอัตโนมัติ — ไม่ต้องกดอะไรเพิ่ม</p>
 
-<div id="unpublishedBanner" class="alert" hidden>⚠️ มีข้อมูลที่ยังไม่ได้เผยแพร่ — ถ้าปิดหน้านี้ไปคนอื่นจะยังไม่เห็นข้อมูลล่าสุด กด "เผยแพร่ข้อมูล" ด้านล่างแล้วนำไฟล์ไป commit เข้า repo</div>
+<div id="unpublishedBanner" class="alert" hidden>⚠️ มีข้อมูลที่ยังไม่ได้เผยแพร่ — ถ้าปิดหน้านี้ไปคนอื่นจะยังไม่เห็นข้อมูลล่าสุด กด "🚀 เผยแพร่ข้อมูล" ด้านล่าง</div>
 <div id="historyViewBanner" class="alert" hidden style="background:#eaf1f5;color:var(--primary-dark);border-color:var(--primary)">
   <span></span> — <a href="#" id="exitHistoryViewBtn">กลับสู่ข้อมูลล่าสุด</a>
 </div>
@@ -56,7 +56,7 @@
   <div id="importStatus" class="status"></div>
   <p id="storedFileInfo" class="note" hidden></p>
   <p style="margin-top:14px">
-    <button class="btn" id="publishGithubBtn">🚀 เผยแพร่เข้า GitHub อัตโนมัติ (ทับ data.json ทันที)</button>
+    <button class="btn" id="publishGithubBtn">🚀 เผยแพร่ข้อมูล</button>
     <button class="btn btn-outline" id="publishBtn">📤 ดาวน์โหลด data.json (ทำเอง)</button>
     <button class="btn btn-outline" id="togglePopEditor">⚙️ ประชากร/ประมาณการณ์</button>
     <button class="btn btn-outline" id="toggleSettingsEditor">🛠️ ตั้งค่าระบบ</button>
