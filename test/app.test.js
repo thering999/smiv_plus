@@ -196,6 +196,23 @@ test('buildViolenceTypeDropoutReportByArea: แยกยอดตามอำเ
   assert.equal(areas.reduce((s, a) => s + a.total, 0), totalPatients);
 });
 
+test('buildViolenceTypeDropoutReportByArea: อำเภอที่ไม่รู้จัก (นอก 7 อำเภอหลัก) ต้องรวมเป็น "other" ไม่ใช่โชว์รหัสดิบ', () => {
+  engine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  const refDate = new Date('2026-06-15');
+  engine.state.patients = [
+    mkPatient({ pid: '1', ampur: '08', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B030', follow_last: '2026-05-01' }),
+    mkPatient({ pid: '2', ampur: '12', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B031', follow_last: '2026-05-01' }),
+    mkPatient({ pid: '3', ampur: '01', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B031', follow_last: '2026-05-01' }),
+  ];
+  const { areas } = engine.buildViolenceTypeDropoutReportByArea(2569, 'ampur', refDate);
+  assert.equal(areas.find(a => a.key === '08'), undefined);
+  assert.equal(areas.find(a => a.key === '12'), undefined);
+  const other = areas.find(a => a.key === 'other');
+  assert.ok(other);
+  assert.equal(other.total, 2);
+  assert.equal(other.label, 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)');
+});
+
 test('crossCheckRegistry: หา PID ที่มีในทะเบียน HDC แต่ขาดใน import และกลับกัน โดยเทียบ hoscode+pid', () => {
   engine.state.patients = [
     mkPatient({ pid: '1', hoscode: 'H1' }), // มีทั้งสองฝั่ง
