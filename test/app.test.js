@@ -287,6 +287,23 @@ test('parseExchangeDetailedWorkbook: ไม่มีคอลัมน์ f_date
   assert.throws(() => engine.parseExchangeDetailedWorkbook(wb), /f_date_serv/);
 });
 
+test('analyzeArea: E เกิน 100% ต้องขึ้นคำเตือน e_over_100 (ผิดปกติ ไม่ใช่ low_access)', () => {
+  const findings = engine.analyzeArea({
+    h: 1000, e: 152.63, i: 100, d: 152, repeat_violence_count: 0, zero_followup: 0,
+    missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0,
+  });
+  assert.ok(findings.some(f => f.category === 'e_over_100'));
+  assert.ok(!findings.some(f => f.category === 'low_access'));
+});
+
+test('analyzeArea: E ปกติ (<=100%) ไม่ขึ้นคำเตือน e_over_100', () => {
+  const findings = engine.analyzeArea({
+    h: 1000, e: 45, i: 100, d: 45, repeat_violence_count: 0, zero_followup: 0,
+    missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0,
+  });
+  assert.ok(!findings.some(f => f.category === 'e_over_100'));
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
