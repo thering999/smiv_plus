@@ -110,8 +110,8 @@
     <p class="note">ตัวชี้วัด HDC 18/3.4: จำนวนผู้ป่วย SMI-V ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ที่มารับการรักษาในปีงบประมาณ
       — "ขาดการรักษา" ตามสเปก HDC คือไม่มารับบริการ ≥1 เดือนนับจากวันนัดครั้งสุดท้าย (แฟ้ม Appointment)
       แต่ระบบนี้ไม่มีข้อมูลวันนัด จึงใช้วันติดตามจริงล่าสุด (follow_last) เทียบกับวันนี้แทน — ตัวเลขจึงเป็นค่าประมาณ ไม่ใช่ตัวเลขทางการ 100%</p>
-    <table class="report-table" style="max-width:600px">
-      <thead><tr><th>ประเภทความรุนแรง</th><th>จำนวน (คน)</th></tr></thead>
+    <table class="report-table" style="max-width:900px">
+      <thead><tr id="violenceTypeReportHead"></tr></thead>
       <tbody id="violenceTypeReportBody"></tbody>
     </table>
     <p class="note" id="violenceTypeReportTotal" style="margin-top:8px"></p>
@@ -506,7 +506,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260916b"></script>
-<script src="ui.js?v=20260916b"></script>
+<script src="app.js?v=20260916c"></script>
+<script src="ui.js?v=20260916c"></script>
 </body>
 </html>

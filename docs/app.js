@@ -393,10 +393,11 @@ const VIOLENCE_TYPE_LABELS = {
   '1B030': 'SMI-V1 (ทำร้ายตนเอง)',
 };
 const VIOLENCE_TYPE_ORDER = Object.keys(VIOLENCE_TYPE_LABELS); // 1B033 ก่อน = ยึดตัวรุนแรงสุด
-function buildViolenceTypeDropoutReport(fy, refDate) {
+
+function filterViolenceDropout(fy, refDate) {
   const maxAge = state.settings.max_age_included;
   const ref = refDate && typeof refDate.getTime === 'function' ? refDate : new Date();
-  const filtered = state.patients.filter(p => {
+  return state.patients.filter(p => {
     if (p.fiscal_year_be !== fy) return false;
     if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) return false;
     if (!p.has_repeat_violence) return false;
@@ -404,15 +405,41 @@ function buildViolenceTypeDropoutReport(fy, refDate) {
     const daysSinceFollow = Math.floor((ref - new Date(p.follow_last)) / 86400000);
     return daysSinceFollow >= 30;
   });
+}
+function topViolenceCode(p) {
+  const codes = new Set(parsePipe(p.b03x_raw));
+  return VIOLENCE_TYPE_ORDER.find(c => codes.has(c)) || null;
+}
+function countByViolenceType(patients) {
   const counts = {};
   for (const code of VIOLENCE_TYPE_ORDER) counts[code] = 0;
-  for (const p of filtered) {
-    const codes = new Set(parsePipe(p.b03x_raw));
-    const topCode = VIOLENCE_TYPE_ORDER.find(c => codes.has(c));
+  for (const p of patients) {
+    const topCode = topViolenceCode(p);
     if (topCode) counts[topCode] += 1;
   }
-  const rows = VIOLENCE_TYPE_ORDER.map(code => ({ code, label: VIOLENCE_TYPE_LABELS[code], count: counts[code] }));
-  return { fy, totalPatients: filtered.length, rows };
+  return VIOLENCE_TYPE_ORDER.map(code => ({ code, label: VIOLENCE_TYPE_LABELS[code], count: counts[code] }));
+}
+function buildViolenceTypeDropoutReport(fy, refDate) {
+  const filtered = filterViolenceDropout(fy, refDate);
+  return { fy, totalPatients: filtered.length, rows: countByViolenceType(filtered) };
+}
+// จำแนกรายอำเภอ/หน่วยบริการ ตามที่สเปก HDC ระบุ ("ระดับหน่วยงาน/พื้นที่", "ระดับหน่วยบริการ")
+function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
+  const filtered = filterViolenceDropout(fy, refDate);
+  const groups = new Map();
+  for (const p of filtered) {
+    const key = groupKeyFor(p, level);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+  const areas = Array.from(groups.entries()).map(([key, ps]) => {
+    let label = key;
+    if (level === 'ampur') label = KNOWN_AMPUR[key] || key;
+    else if (level === 'hoscode') label = ps.find(p => p.hosname)?.hosname || key;
+    return { key, label, rows: countByViolenceType(ps), total: ps.length };
+  });
+  areas.sort((a, b) => b.total - a.total);
+  return { fy, level, totalPatients: filtered.length, totalsByType: countByViolenceType(filtered), areas };
 }
 
 // ---------- export ----------
@@ -421,7 +448,7 @@ window.smivEngine = {
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
-  buildViolenceTypeDropoutReport,
+  buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
 };
 
 })();
