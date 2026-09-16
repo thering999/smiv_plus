@@ -246,19 +246,24 @@ function buildReport(fy, level, dateFrom, dateTo) {
     const missingFollowup = ps.filter(p => !p.follow_last).length;
     const sameDayFollowup = ps.filter(p => p.follow_last && p.follow_last === p.first_date_serv).length;
 
-    let h = 0, ampurName = null;
+    let h = 0, ampurName = null, deceased = 0;
     if (level !== 'chw_addr') {
       const popRow = pop[r.ampur_ref];
       h = popRow ? Number(popRow.pop15_60) : 0;
       ampurName = popRow ? popRow.name : null;
+      deceased = popRow ? Number(popRow.deceased) || 0 : 0;
     }
     const i = h > 0 ? estimateSmivPatients(h) : 0;
     if (h > 0) hasPopulationData = true;
 
+    // ตัดผู้เสียชีวิตออกจากตัวนับ (กรอกมือต่อปีงบ/อำเภอ — ไม่มีทางเชื่อมข้อมูลมหาดไทย)
+    const dLive = Math.max(0, d - deceased);
+    const fLive = Math.max(0, f - deceased);
+
     const label = level === 'ampur' ? (ampurName || r.label) : r.label;
     const line = {
       group_key: r.group_key, ampur: r.group_key, ampur_name: label,
-      b, c, d, e: pct(d, i), f, h, i,
+      b, c, d: dLive, e: pct(dLive, i), f: fLive, h, i, deceased,
       j, k, l: pct(k, i), m, n, o: pct(n, i),
       zero_followup: zeroFollowup, repeat_violence_count: repeatViolenceCount,
       missing_birth: missingBirth, missing_tambon: missingTambon,
