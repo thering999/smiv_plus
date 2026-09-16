@@ -443,28 +443,35 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
 }
 
 // ---------- Cross-check กับทะเบียนผู้ป่วย SMI-V จาก HDC Data-Exchange ----------
-// ทะเบียนนี้เป็น export แบบ "รายประชากร" (1 แถวต่อคน ล่าสุด) คอลัมน์: hoscode, hosname, pid, cid,
-// name, lname, hn, birth, sex, nation, vhid, typearea, discharge, fx_all, g_code, total_visit
-// ข้อมูลหยาบกว่าไฟล์ Data sheet หลัก (ไม่มีประวัติครบทุกครั้ง) จึงใช้แค่ "เทียบยอดไขว้" ว่า
-// PID ในไฟล์ที่ import ไว้ ครบ/ตรงกับทะเบียนกลางของ HDC ไหม ไม่ใช้แทนที่การ import หลัก
-const REGISTRY_EXPECTED_HEADERS = ['hoscode','hosname','pid','cid','name','lname','hn','birth','sex','nation','vhid','typearea','discharge','fx_all','g_code','total_visit'];
+// พบว่า export จากหน้า HDC Data-Exchange มีหลายฟอร์แมตคอลัมน์ต่างกันไปตามรายงานที่เลือก
+// (เจอมาแล้ว 4 แบบ: 16 คอลัมน์ / 28 คอลัมน์ / 8 คอลัมน์ / 14 คอลัมน์ — ไม่มีฟอร์แมตตายตัว)
+// จึงอ่านแบบยืดหยุ่น: ดึงเฉพาะคอลัมน์ที่ใช้จริง (hoscode, pid ต้องมี — เป็นคีย์เทียบยอด, ที่เหลือดึงถ้ามี)
+// ไม่สนคอลัมน์อื่นที่แต่ละฟอร์แมตมีไม่เท่ากัน (hn, vhid, typearea, f_/b_/l_ ppspecial ฯลฯ)
+// ใช้เทียบยอดไขว้เท่านั้น ไม่ใช้แทนที่การ import หลัก (ทะเบียนนี้ไม่มีประวัติการมาครบทุกครั้งเสมอไป)
+const REGISTRY_REQUIRED_COLS = ['hoscode', 'pid'];
+const REGISTRY_OPTIONAL_COLS = ['cid', 'name', 'lname'];
 function parseRegistryWorkbook(wb) {
   const sheetName = wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
   if (!rows.length) throw new Error('ชีตไม่มีข้อมูล (แถวว่าง)');
   const header = rows[0].map(h => String(h).trim().toLowerCase());
-  const missingCols = REGISTRY_EXPECTED_HEADERS.filter(h => !header.includes(h));
-  if (missingCols.length) throw new Error(`ไฟล์ทะเบียนไม่มีคอลัมน์: ${missingCols.join(', ')} (ต้องเป็นไฟล์ export จาก HDC Data-Exchange ทะเบียนผู้ป่วย SMIV)`);
+  const missingCols = REGISTRY_REQUIRED_COLS.filter(h => !header.includes(h));
+  if (missingCols.length) throw new Error(`ไฟล์ทะเบียนไม่มีคอลัมน์: ${missingCols.join(', ')} (ต้องเป็นไฟล์ export จาก HDC Data-Exchange ที่มีอย่างน้อย hoscode กับ pid)`);
   const idx = {};
-  REGISTRY_EXPECTED_HEADERS.forEach(h => { idx[h] = header.indexOf(h); });
+  [...REGISTRY_REQUIRED_COLS, ...REGISTRY_OPTIONAL_COLS].forEach(h => { idx[h] = header.indexOf(h); });
   const out = [];
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const hoscode = String(row[idx.hoscode] || '').trim();
     const pid = String(row[idx.pid] || '').trim();
     if (!hoscode || !pid) continue;
-    out.push({ hoscode, pid, cid: String(row[idx.cid] || '').trim(), name: String(row[idx.name] || '').trim(), lname: String(row[idx.lname] || '').trim() });
+    out.push({
+      hoscode, pid,
+      cid: idx.cid >= 0 ? String(row[idx.cid] || '').trim() : '',
+      name: idx.name >= 0 ? String(row[idx.name] || '').trim() : '',
+      lname: idx.lname >= 0 ? String(row[idx.lname] || '').trim() : '',
+    });
   }
   return out;
 }
