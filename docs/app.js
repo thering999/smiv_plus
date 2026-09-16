@@ -123,7 +123,15 @@ function validateAndParse(wb) {
   EXPECTED_HEADERS.forEach((expected, i) => {
     if ((header[i] || '') !== expected) errors.push(`หัวคอลัมน์ที่ ${i + 1} ต้องเป็น '${expected}' แต่พบ '${header[i] || ''}'`);
   });
-  if (errors.length) throw new Error(errors.join('\n'));
+  if (errors.length) {
+    // สัญญาณว่าไฟล์นี้คือ export จาก HDC Data-Exchange (คนละฟอร์แมตกับ Data sheet) — เคยเกิดจริงที่คนอัปโหลดผิดช่อง
+    const lowerHeader = header.map(h => h.toLowerCase());
+    const exchangeSignature = ['nation', 'vhid', 'typearea', 'g_visit', 'fx_all', 'check_vhid', 'hn', 'f_ppspecial'];
+    if (exchangeSignature.some(sig => lowerHeader.includes(sig))) {
+      errors.push('', '⚠️ ไฟล์นี้ดูเหมือนเป็น export จากหน้า "HDC Data-Exchange" (ทะเบียนผู้ป่วย) ไม่ใช่ไฟล์ Data sheet ที่ช่องนี้ต้องการ — ใช้ในช่อง "เทียบยอดกับทะเบียน SMI-V" ด้านล่างแทน');
+    }
+    throw new Error(errors.join('\n'));
+  }
 
   const patients = [];
   for (let r = 1; r < rows.length; r++) {
