@@ -4,7 +4,8 @@
 
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
-  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend } = window.smivEngine;
+  qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
+  buildViolenceTypeDropoutReport } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -765,6 +766,15 @@ function renderPopulationEditor() {
   }
 }
 
+// ---------- ตัวชี้วัด 18/3.4: ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ----------
+function renderViolenceTypeReport() {
+  const fy = currentFy();
+  const { totalPatients, rows } = buildViolenceTypeDropoutReport(fy);
+  $('#violenceTypeReportBody').innerHTML = rows.map(r => `
+    <tr><td>${escapeHtml(r.label)}</td><td>${fmt(r.count)}</td></tr>`).join('');
+  $('#violenceTypeReportTotal').textContent = `รวมทั้งหมด: ${fmt(totalPatients)} คน (ปีงบ ${fy})`;
+}
+
 function copyPopulationFromPreviousYear() {
   const fy = currentFy();
   const prevFy = fy - 1;
@@ -1338,7 +1348,10 @@ async function init() {
   });
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
-  $('#fySelect').addEventListener('change', () => { seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor(); });
+  $('#fySelect').addEventListener('change', () => {
+    seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor();
+    if (!$('#violenceTypeReport').hidden) renderViolenceTypeReport();
+  });
   $('#printExecSummaryBtn').addEventListener('click', printExecutiveSummary);
   $('#downloadPdfBtn').addEventListener('click', downloadExecSummaryPdf);
   $('#levelSelect').addEventListener('change', render);
@@ -1371,6 +1384,11 @@ async function init() {
   $('#publishGithubBtn').addEventListener('click', publishToGithub);
   $('#togglePopEditor').addEventListener('click', () => { $('#popEditor').hidden = !$('#popEditor').hidden; });
   $('#toggleSettingsEditor').addEventListener('click', () => { $('#settingsEditor').hidden = !$('#settingsEditor').hidden; });
+  $('#toggleViolenceTypeReport').addEventListener('click', () => {
+    const panel = $('#violenceTypeReport');
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) renderViolenceTypeReport();
+  });
   $('#clearDataBtn').addEventListener('click', clearAllData);
   $('#saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
   $('#toggleHistoryPanel').addEventListener('click', () => {

@@ -379,12 +379,49 @@ function buildYearlyTrendByAmpur() {
   return { years, series };
 }
 
+// ---------- ตัวชี้วัด 18/3.4 (HDC): จำนวนผู้ป่วย SMI-V ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ต่อปีงบ ----------
+// อ้างอิงสเปกทางการ HDC (กองบริหารระบบบริการสุขภาพจิต, "จำนวนผู้ป่วยจิตเวชยาเสพติดก่อความรุนแรง (SMI-V)
+// ที่ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ที่มารับการรักษาในปีงบประมาณ"):
+//   "ขาดการรักษา" = ไม่ได้มารับบริการ >=1 เดือน นับจากวันนัดครั้งสุดท้าย (แฟ้ม Appointment)
+//     — ระบบนี้ไม่มีแฟ้ม Appointment/วันนัด จึงใช้ follow_last (วันติดตามจริงล่าสุด) เทียบกับวันที่ปัจจุบันแทน (ใกล้เคียงที่สุดจากข้อมูลที่มี)
+//   "ก่อความรุนแรงซ้ำ" = has_repeat_violence เดิมของระบบ (ลงรหัส 1B030-1B033 มากกว่า 1 ครั้งสะสม ไม่รวม 1B037)
+//   "จำแนกตามประเภทความรุนแรง" = 1 คนนับเข้าประเภทเดียว ยึดรหัสรุนแรงสุดที่มี เรียงจากมากไปน้อย 1B033>1B032>1B031>1B030 (ตามสเปก)
+const VIOLENCE_TYPE_LABELS = {
+  '1B033': 'SMI-V4 (ก่อคดีอาชญากรรมรุนแรง)',
+  '1B032': 'SMI-V3 (หลงผิด มุ่งร้ายเฉพาะเจาะจง)',
+  '1B031': 'SMI-V2 (ทำร้ายผู้อื่น/ก่อเหตุชุมชน)',
+  '1B030': 'SMI-V1 (ทำร้ายตนเอง)',
+};
+const VIOLENCE_TYPE_ORDER = Object.keys(VIOLENCE_TYPE_LABELS); // 1B033 ก่อน = ยึดตัวรุนแรงสุด
+function buildViolenceTypeDropoutReport(fy, refDate) {
+  const maxAge = state.settings.max_age_included;
+  const ref = refDate instanceof Date ? refDate : new Date();
+  const filtered = state.patients.filter(p => {
+    if (p.fiscal_year_be !== fy) return false;
+    if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) return false;
+    if (!p.has_repeat_violence) return false;
+    if (!p.follow_last) return false;
+    const daysSinceFollow = Math.floor((ref - new Date(p.follow_last)) / 86400000);
+    return daysSinceFollow >= 30;
+  });
+  const counts = {};
+  for (const code of VIOLENCE_TYPE_ORDER) counts[code] = 0;
+  for (const p of filtered) {
+    const codes = new Set(parsePipe(p.b03x_raw));
+    const topCode = VIOLENCE_TYPE_ORDER.find(c => codes.has(c));
+    if (topCode) counts[topCode] += 1;
+  }
+  const rows = VIOLENCE_TYPE_ORDER.map(code => ({ code, label: VIOLENCE_TYPE_LABELS[code], count: counts[code] }));
+  return { fy, totalPatients: filtered.length, rows };
+}
+
 // ---------- export ----------
 window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
   countFindingsByCategory, FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR,
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
+  buildViolenceTypeDropoutReport,
 };
 
 })();
