@@ -213,8 +213,21 @@ function setMailtoLink(sel, subject, body) {
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
 
 // ---------- Render ----------
+function renderApproxSourceBanner() {
+  const banner = $('#approxSourceBanner');
+  if (!banner) return;
+  const count = state.patients.filter(p => p.approx_source).length;
+  if (count > 0) {
+    banner.hidden = false;
+    banner.textContent = `⚠️ มีผู้ป่วย ${count.toLocaleString('th-TH')} คน ที่มาจากไฟล์ HDC Data-Exchange สำรอง (ความแม่นยำจำกัด — นับได้แค่ 3 ครั้งต่อคน) ปนอยู่ในข้อมูลนี้ ตัวเลขบางส่วนอาจไม่แม่นยำ 100%`;
+  } else {
+    banner.hidden = true;
+  }
+}
+
 function render() {
   populateFySelect();
+  renderApproxSourceBanner();
   const fy = currentFy();
   const level = currentLevel();
   const dateFrom = $('#dateFrom').value || null;
