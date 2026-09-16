@@ -584,7 +584,7 @@ function renderCharts(report, totals, level, hasPop) {
     drawChart('chartFollowSummary', {
       type: 'doughnut',
       data: { labels: ['ไม่เคยติดตาม', 'ติดตาม 1 ครั้ง', 'ติดตาม ≥2 ครั้ง'], datasets: [{ data: [totals.zero_followup, totals.j, totals.m], backgroundColor: ['#c0392b', '#e0a63c', '#1e7e34'] }] },
-      options: { responsive: true },
+      options: { responsive: true, aspectRatio: 1.8 },
     });
   }
 
@@ -612,7 +612,7 @@ function renderCharts(report, totals, level, hasPop) {
   drawChart('chartSex', {
     type: 'pie',
     data: { labels: Object.keys(sexCount), datasets: [{ data: Object.values(sexCount), backgroundColor: ['#2c6e91', '#e07b9e', '#9aa5ad'] }] },
-    options: { responsive: true },
+    options: { responsive: true, aspectRatio: 1.8 },
   });
 
   const monthCount = {};
@@ -991,7 +991,7 @@ function renderProblemPatients(fy, level, areaFilter) {
   drawChart('chartProblemPriority', {
     type: 'doughnut',
     data: { labels: ['สูง (ก่อความรุนแรงซ้ำ)', 'กลาง (หลายปัญหา/ค้างนาน)', 'ปกติ'], datasets: [{ data: [priorityCount['สูง'], priorityCount['กลาง'], priorityCount['ปกติ']], backgroundColor: ['#c0392b', '#e0a63c', '#9aa5ad'] }] },
-    options: { responsive: true },
+    options: { responsive: true, aspectRatio: 1.8 },
   });
 
   problemPatientsAll = rows;
