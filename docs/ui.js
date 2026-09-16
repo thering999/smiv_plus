@@ -5,7 +5,7 @@
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
-  buildViolenceTypeDropoutReport } = window.smivEngine;
+  buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -767,12 +767,24 @@ function renderPopulationEditor() {
 }
 
 // ---------- ตัวชี้วัด 18/3.4: ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ----------
+// สเปก HDC ระบุให้แสดงผลระดับหน่วยงาน/พื้นที่ + ระดับหน่วยบริการ (ไม่ใช่แค่ตัวเลขรวมจังหวัดเดียว)
 function renderViolenceTypeReport() {
   const fy = currentFy();
-  const { totalPatients, rows } = buildViolenceTypeDropoutReport(fy);
-  $('#violenceTypeReportBody').innerHTML = rows.map(r => `
-    <tr><td>${escapeHtml(r.label)}</td><td>${fmt(r.count)}</td></tr>`).join('');
-  $('#violenceTypeReportTotal').textContent = `รวมทั้งหมด: ${fmt(totalPatients)} คน (ปีงบ ${fy})`;
+  const rawLevel = currentLevel();
+  const level = rawLevel === 'chw_addr' ? 'ampur' : rawLevel; // chw_addr = ภูมิลำเนาผู้ป่วย ไม่ใช่หน่วยรักษา ไม่เหมาะกับรายงานนี้
+  const { totalPatients, totalsByType, areas } = buildViolenceTypeDropoutReportByArea(fy, level);
+
+  const headCols = totalsByType.map(t => `<th>${escapeHtml(t.label)}</th>`).join('');
+  $('#violenceTypeReportHead').innerHTML = `<th>${level === 'hoscode' ? 'หน่วยบริการ' : 'อำเภอ'}</th>${headCols}<th>รวม</th>`;
+
+  const areaRows = areas.map(a => {
+    const cells = a.rows.map(r => `<td>${fmt(r.count)}</td>`).join('');
+    return `<tr><td>${escapeHtml(a.label)}</td>${cells}<td>${fmt(a.total)}</td></tr>`;
+  }).join('');
+  const totalCells = totalsByType.map(t => `<td>${fmt(t.count)}</td>`).join('');
+  const totalRow = `<tr style="font-weight:bold"><td>รวมทั้งหมด</td>${totalCells}<td>${fmt(totalPatients)}</td></tr>`;
+  $('#violenceTypeReportBody').innerHTML = (areaRows || `<tr><td colspan="${totalsByType.length + 2}">ไม่พบผู้ป่วยตามเกณฑ์</td></tr>`) + totalRow;
+  $('#violenceTypeReportTotal').textContent = `รวมทั้งหมด: ${fmt(totalPatients)} คน (ปีงบ ${fy}, ${level === 'hoscode' ? 'รายหน่วยบริการ' : 'รายอำเภอ'})`;
 }
 
 function copyPopulationFromPreviousYear() {
@@ -866,11 +878,13 @@ function exportReportXlsx(levelOverride) {
 
 function exportViolenceTypeXlsx() {
   const fy = currentFy();
-  const { totalPatients, rows } = buildViolenceTypeDropoutReport(fy);
-  const header = [`ตัวชี้วัด HDC 18/3.4 — ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ปีงบประมาณ ${fy}`];
-  const cols = ['ประเภทความรุนแรง', 'จำนวน (คน)'];
-  const data = rows.map(r => [r.label, r.count]);
-  data.push(['รวมทั้งหมด', totalPatients]);
+  const rawLevel = currentLevel();
+  const level = rawLevel === 'chw_addr' ? 'ampur' : rawLevel;
+  const { totalPatients, totalsByType, areas } = buildViolenceTypeDropoutReportByArea(fy, level);
+  const header = [`ตัวชี้วัด HDC 18/3.4 — ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ปีงบประมาณ ${fy} (${level === 'hoscode' ? 'รายหน่วยบริการ' : 'รายอำเภอ'})`];
+  const cols = [level === 'hoscode' ? 'หน่วยบริการ' : 'อำเภอ', ...totalsByType.map(t => t.label), 'รวม'];
+  const data = areas.map(a => [a.label, ...a.rows.map(r => r.count), a.total]);
+  data.push(['รวมทั้งหมด', ...totalsByType.map(t => t.count), totalPatients]);
   const ws = XLSX.utils.aoa_to_sheet([header, [], cols, ...data]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'ตัวชี้วัด 18');
@@ -1367,7 +1381,10 @@ async function init() {
   });
   $('#printExecSummaryBtn').addEventListener('click', printExecutiveSummary);
   $('#downloadPdfBtn').addEventListener('click', downloadExecSummaryPdf);
-  $('#levelSelect').addEventListener('change', render);
+  $('#levelSelect').addEventListener('change', () => {
+    render();
+    if (!$('#violenceTypeReport').hidden) renderViolenceTypeReport();
+  });
   $('#mainTableSearch').addEventListener('input', e => { mainTableSearch = e.target.value; render(); });
   $$('table.report-table thead th[data-sort-key]').forEach(th => {
     const sortByThis = () => {

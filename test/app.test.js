@@ -180,6 +180,22 @@ test('buildViolenceTypeDropoutReport: นับเฉพาะผู้ป่ว
   assert.equal(v1.count, 0);
 });
 
+test('buildViolenceTypeDropoutReportByArea: แยกยอดตามอำเภอ ยอดรวมต้องตรงกับผลรวมของทุกอำเภอ', () => {
+  engine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  const refDate = new Date('2026-06-15');
+  engine.state.patients = [
+    mkPatient({ pid: '1', ampur: '01', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B030', follow_last: '2026-05-01' }),
+    mkPatient({ pid: '2', ampur: '02', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B031', follow_last: '2026-05-01' }),
+    mkPatient({ pid: '3', ampur: '02', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B031', follow_last: '2026-05-01' }),
+  ];
+  const { totalPatients, areas } = engine.buildViolenceTypeDropoutReportByArea(2569, 'ampur', refDate);
+  assert.equal(totalPatients, 3);
+  const a01 = areas.find(a => a.key === '01'), a02 = areas.find(a => a.key === '02');
+  assert.equal(a01.total, 1);
+  assert.equal(a02.total, 2);
+  assert.equal(areas.reduce((s, a) => s + a.total, 0), totalPatients);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
