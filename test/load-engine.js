@@ -6,7 +6,9 @@ const vm = require('vm');
 
 function loadEngine() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'docs', 'app.js'), 'utf8');
-  const sandbox = { window: {}, console };
+  // XLSX stub สำหรับ parseRegistryWorkbook: sheet_to_json รับ "sheet" ที่เป็น array-of-arrays ตรงๆ (test ควบคุมข้อมูลเอง)
+  const xlsxStub = { utils: { sheet_to_json: sheet => sheet } };
+  const sandbox = { window: {}, console, XLSX: xlsxStub };
   vm.createContext(sandbox);
   new vm.Script(src, { filename: 'app.js' }).runInContext(sandbox);
   return sandbox.window.smivEngine;
