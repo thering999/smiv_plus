@@ -80,7 +80,7 @@ async function loadPublished() {
 function seedDefaultPopulationNames(fy) {
   if (!state.population[fy]) state.population[fy] = {};
   for (const [code, name] of Object.entries(KNOWN_AMPUR)) {
-    if (!state.population[fy][code]) state.population[fy][code] = { name, pop15_60: 0 };
+    if (!state.population[fy][code]) state.population[fy][code] = { name, pop15_60: 0, deceased: 0 };
   }
 }
 
@@ -752,6 +752,7 @@ function renderPopulationEditor() {
       <td>${escapeHtml(code)}</td>
       <td>${escapeHtml(r.name)}</td>
       <td><input type="number" min="0" value="${r.pop15_60}" data-ampur="${escapeHtml(code)}" class="pop-input"></td>
+      <td><input type="number" min="0" value="${r.deceased || 0}" data-ampur="${escapeHtml(code)}" class="deceased-input"></td>
       <td>${fmt(Math.round(r.pop15_60 * state.settings.smi_prevalence_pct / 100 * state.settings.smiv_ratio_pct / 100))}</td>
     </tr>`).join('');
 
@@ -772,7 +773,7 @@ function copyPopulationFromPreviousYear() {
   if (!confirm(`คัดลอกข้อมูลประชากรจากปีงบ ${prevFy} มาเป็นค่าเริ่มต้นของปีงบ ${fy}? (ช่องที่กรอกไว้แล้วในปีนี้จะถูกทับ)`)) return;
   if (!state.population[fy]) state.population[fy] = {};
   for (const [code, r] of Object.entries(prev)) {
-    state.population[fy][code] = { name: r.name, pop15_60: r.pop15_60 };
+    state.population[fy][code] = { name: r.name, pop15_60: r.pop15_60, deceased: r.deceased || 0 };
   }
   renderPopulationEditor();
 }
@@ -802,8 +803,13 @@ function savePopulationFromForm() {
 
   $$('.pop-input').forEach(input => {
     const code = input.dataset.ampur;
-    if (!state.population[fy][code]) state.population[fy][code] = { name: code, pop15_60: 0 };
+    if (!state.population[fy][code]) state.population[fy][code] = { name: code, pop15_60: 0, deceased: 0 };
     state.population[fy][code].pop15_60 = Number(input.value) || 0;
+  });
+  $$('.deceased-input').forEach(input => {
+    const code = input.dataset.ampur;
+    if (!state.population[fy][code]) state.population[fy][code] = { name: code, pop15_60: 0, deceased: 0 };
+    state.population[fy][code].deceased = Number(input.value) || 0;
   });
   saveLocal();
   markDirty();
@@ -1065,6 +1071,19 @@ let publishInFlight = false;
 let lastPublishAt = 0;
 const PUBLISH_COOLDOWN_MS = 8000;
 
+// ---------- ตรวจคุณภาพข้อมูลก่อนเผยแพร่: รูปแบบ cid + อายุผิดปกติ ----------
+function checkDataQuality(patients) {
+  const badCid = [], badAge = [];
+  for (const p of patients) {
+    const cid = (p.cid || '').trim();
+    if (cid && !/^\d{13}$/.test(cid)) badCid.push(`${p.pid} (${p.name || ''} ${p.lname || ''})`.trim());
+    if (p.age_at_fy_end !== null && (p.age_at_fy_end < 0 || p.age_at_fy_end > 120)) {
+      badAge.push(`${p.pid} (${p.name || ''} ${p.lname || ''}) อายุ ${p.age_at_fy_end} ปี`.trim());
+    }
+  }
+  return { badCid, badAge };
+}
+
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
 
@@ -1078,6 +1097,19 @@ async function publishToGithub() {
     statusEl.textContent = `⏳ เพิ่งเผยแพร่ไปเมื่อครู่ กรุณารออีก ${Math.ceil((PUBLISH_COOLDOWN_MS - sinceLast) / 1000)} วินาที (กันยิง GitHub API ถี่เกินไป)`;
     statusEl.className = 'status';
     return;
+  }
+
+  const { badCid, badAge } = checkDataQuality(state.patients);
+  if (badCid.length || badAge.length) {
+    const parts = [];
+    if (badCid.length) parts.push(`เลขบัตรประชาชน (cid) รูปแบบผิด (ไม่ใช่ตัวเลข 13 หลัก) ${badCid.length} รายการ:\n${badCid.slice(0, 10).join('\n')}${badCid.length > 10 ? `\n...และอีก ${badCid.length - 10} รายการ` : ''}`);
+    if (badAge.length) parts.push(`อายุผิดปกติ (ติดลบ หรือเกิน 120 ปี) ${badAge.length} รายการ:\n${badAge.slice(0, 10).join('\n')}${badAge.length > 10 ? `\n...และอีก ${badAge.length - 10} รายการ` : ''}`);
+    const ok = confirm(`⚠️ พบข้อมูลผิดปกติในไฟล์ที่จะเผยแพร่:\n\n${parts.join('\n\n')}\n\nอาจเกิดจากไฟล์นำเข้าผิด/คอลัมน์เลื่อน — ต้องการเผยแพร่ต่อจริงหรือไม่?\n(กด "ยกเลิก" เพื่อหยุดและตรวจสอบไฟล์ก่อน)`);
+    if (!ok) {
+      statusEl.textContent = '⏸️ ยกเลิกการเผยแพร่ — ตรวจสอบข้อมูลที่ผิดปกติก่อน';
+      statusEl.className = 'status';
+      return;
+    }
   }
 
   const newCount = state.patients.length;
