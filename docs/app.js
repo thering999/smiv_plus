@@ -450,6 +450,98 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
   return { fy, level, totalPatients: filtered.length, totalsByType: countByViolenceType(filtered), areas };
 }
 
+// ---------- Import สำรองจากไฟล์ HDC Data-Exchange แบบละเอียด (f_/b_/l_ ppspecial) ----------
+// ⚠️ ความแม่นยำจำกัด: ไฟล์นี้เก็บแค่ 3 จุดต่อคน (ครั้งแรก/ก่อนหน้า/ล่าสุด) ไม่ใช่ประวัติครบทุกครั้งแบบ
+// ไฟล์ Data sheet หลัก — ถ้าผู้ป่วยมารับบริการเกิน 3 ครั้งจริง total_visits/b03x ที่คำนวณได้จะนับขาด
+// ใช้เป็นทางเลือกสำรองเมื่อไม่มีไฟล์ Data sheet จาก HIS เท่านั้น ไม่แนะนำใช้แทนไฟล์หลักถ้ามีไฟล์จริงอยู่
+const EXCHANGE_DETAILED_REQUIRED_COLS = ['hoscode', 'pid', 'f_date_serv', 'f_ppspecial'];
+function parseVhidCode(vhid) {
+  const s = String(vhid || '').trim();
+  if (!/^\d{8}$/.test(s)) return null;
+  return { prov: s.slice(0, 2), ampur: s.slice(2, 4), tambon: s.slice(4, 6) };
+}
+function isNaVal(v) {
+  const s = String(v || '').trim();
+  return s === '' || s.toUpperCase() === '<NA>' || s.toUpperCase() === 'NA' || s.toUpperCase() === 'NULL';
+}
+function parseExchangeDetailedWorkbook(wb) {
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+  if (!rows.length) throw new Error('ชีตไม่มีข้อมูล (แถวว่าง)');
+  const header = rows[0].map(h => String(h).trim().toLowerCase());
+  const missingCols = EXCHANGE_DETAILED_REQUIRED_COLS.filter(h => !header.includes(h));
+  if (missingCols.length) throw new Error(`ไฟล์นี้ไม่ใช่ฟอร์แมตที่รองรับ (ไม่มีคอลัมน์: ${missingCols.join(', ')}) — ต้องเป็นไฟล์ HDC Data-Exchange ที่มี f_date_serv/f_ppspecial เป็นอย่างน้อย`);
+  const cols = ['hoscode', 'hosname', 'pid', 'cid', 'name', 'lname', 'sex', 'birth', 'check_vhid', 'nation',
+    'f_date_serv', 'f_ppspecial', 'b_date_serv', 'b_ppspecial', 'l_date_serv', 'l_ppspecial'];
+  const idx = {};
+  cols.forEach(h => { idx[h] = header.indexOf(h); });
+  const get = (row, key) => (idx[key] >= 0 ? row[idx[key]] : '');
+
+  const warnings = [];
+  const patients = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const hoscode = String(get(row, 'hoscode') || '').trim();
+    const pid = String(get(row, 'pid') || '').trim();
+    if (!hoscode || !pid) continue;
+
+    const fDateRaw = get(row, 'f_date_serv');
+    if (isNaVal(fDateRaw)) { warnings.push(`แถว ${r + 1} (pid ${pid}): f_date_serv ว่าง ข้ามแถวนี้`); continue; }
+    const fDate = excelDateToJs(isNaN(fDateRaw) ? fDateRaw : Number(fDateRaw));
+    if (!fDate) { warnings.push(`แถว ${r + 1} (pid ${pid}): f_date_serv อ่านเป็นวันที่ไม่ได้`); continue; }
+    const firstDateServ = toYmd(fDate);
+    const fy = fiscalYearBe(firstDateServ);
+
+    // รวม 3 จุด (แรก/ก่อนหน้า/ล่าสุด) เป็นลำดับเหตุการณ์เท่าที่มี ตัดจุดที่เป็น <NA> หรือวันที่ซ้ำกันออก
+    const points = [
+      { date: firstDateServ, code: String(get(row, 'f_ppspecial') || '').trim() },
+    ];
+    const bDateRaw = get(row, 'b_date_serv');
+    if (!isNaVal(bDateRaw)) {
+      const bDate = excelDateToJs(isNaN(bDateRaw) ? bDateRaw : Number(bDateRaw));
+      if (bDate) points.push({ date: toYmd(bDate), code: String(get(row, 'b_ppspecial') || '').trim() });
+    }
+    const lDateRaw = get(row, 'l_date_serv');
+    if (!isNaVal(lDateRaw)) {
+      const lDate = excelDateToJs(isNaN(lDateRaw) ? lDateRaw : Number(lDateRaw));
+      if (lDate) points.push({ date: toYmd(lDate), code: String(get(row, 'l_ppspecial') || '').trim() });
+    }
+    const seenDates = new Set();
+    const uniquePoints = points.filter(p => {
+      if (!p.date || seenDates.has(p.date)) return false;
+      seenDates.add(p.date);
+      return true;
+    }).sort((a, b) => a.date < b.date ? -1 : 1);
+
+    const dateServRaw = uniquePoints.map(p => p.date).join('|');
+    const b03xRaw = uniquePoints.map(p => p.code).filter(Boolean).join('|');
+    const b03xCodes = parsePipe(b03xRaw);
+    const totalVisits = uniquePoints.length || 1;
+    const followLast = uniquePoints.length > 1 ? uniquePoints[uniquePoints.length - 1].date : null;
+
+    const birthRaw = get(row, 'birth');
+    const birthDate = isNaVal(birthRaw) ? null : excelDateToJs(birthRaw);
+    const birth = birthDate ? toYmd(birthDate) : null;
+    const ageAtFyEnd = birth ? ageAt(birth, fiscalYearEndDate(fy)) : null;
+
+    const vhid = parseVhidCode(get(row, 'check_vhid'));
+
+    patients.push({
+      hoscode, hosname: String(get(row, 'hosname') || '').trim(), pid,
+      cid: String(get(row, 'cid') || '').trim(), name: String(get(row, 'name') || '').trim(), lname: String(get(row, 'lname') || '').trim(),
+      birth, sex: get(row, 'sex') === '' ? null : Number(get(row, 'sex')),
+      chw_addr: vhid ? vhid.prov : '', tambon: vhid ? vhid.tambon : '', ampur: vhid ? vhid.ampur : '',
+      first_date_serv: firstDateServ, date_serv_raw: dateServRaw, diagcode_raw: '',
+      b03x_raw: b03xRaw, follow_last: followLast,
+      fiscal_year_be: fy, smiv_code_count: b03xCodes.length, has_repeat_violence: b03xCodes.length > 1,
+      age_at_fy_end: ageAtFyEnd, total_visits: totalVisits,
+      approx_source: true, // มาจากไฟล์ HDC Data-Exchange ไม่ใช่ Data sheet หลัก — total_visits/b03x อาจนับขาดถ้ามาเกิน 3 ครั้งจริง
+    });
+  }
+  return { patients, warnings };
+}
+
 // ---------- Cross-check กับทะเบียนผู้ป่วย SMI-V จาก HDC Data-Exchange ----------
 // พบว่า export จากหน้า HDC Data-Exchange มีหลายฟอร์แมตคอลัมน์ต่างกันไปตามรายงานที่เลือก
 // (เจอมาแล้ว 4 แบบ: 16 คอลัมน์ / 28 คอลัมน์ / 8 คอลัมน์ / 14 คอลัมน์ — ไม่มีฟอร์แมตตายตัว)
@@ -498,7 +590,7 @@ window.smivEngine = {
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
-  parseRegistryWorkbook, crossCheckRegistry,
+  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook,
 };
 
 })();

@@ -124,6 +124,7 @@
   <p class="note">อัปโหลดไฟล์ export จากหน้า HDC Data-Exchange (.xlsx) เช่น "ทะเบียนผู้ป่วย SMIV", "ไม่ก่อความรุนแรงซ้ำ" ฯลฯ — รองรับได้ทุกฟอร์แมตคอลัมน์
     (แต่ละรายงานของ HDC มีคอลัมน์ไม่เท่ากัน) ขอแค่มีคอลัมน์ hoscode กับ pid ก็เทียบยอดได้ — ใช้เทียบยอดไขว้เท่านั้น ไม่ใช้แทนการ import หลัก (ทะเบียนเหล่านี้ไม่มีประวัติการมาครบทุกครั้งเสมอไป)</p>
   <input type="file" id="registryFile" accept=".xlsx">
+  <p class="note" id="registryFileList"></p>
   <div id="registryCheckStatus" class="status"></div>
   <div id="registryCheckResults" hidden style="margin-top:14px">
     <p class="note" id="registryMissingCount"></p>
@@ -137,6 +138,15 @@
       <tbody id="registryExtraBody"></tbody>
     </table>
   </div>
+</div>
+
+<div class="card" id="exchangeImportCard">
+  <h2 style="margin-top:0;border:none;padding-left:0">⚠️ นำเข้าข้อมูลสำรองจาก HDC Data-Exchange (ความแม่นยำจำกัด)</h2>
+  <p class="note">ใช้เฉพาะเมื่อ<strong>ไม่มีไฟล์ Data sheet จากระบบ HIS โรงพยาบาล</strong>เท่านั้น — รองรับเฉพาะไฟล์ที่มีคอลัมน์
+    <code>f_date_serv</code>/<code>f_ppspecial</code> (และ <code>b_</code>/<code>l_</code> ถ้ามี) เก็บได้แค่ 3 จุดต่อคน (ครั้งแรก/ก่อนหน้า/ล่าสุด)
+    <strong>ถ้าผู้ป่วยมารับบริการเกิน 3 ครั้งจริง จำนวนครั้ง/รหัส SMI-V ที่คำนวณได้จะนับขาด</strong> — ไม่แม่นยำเท่าไฟล์หลัก ต้องยืนยันก่อน merge ทุกครั้ง</p>
+  <input type="file" id="exchangeImportFile" accept=".xlsx">
+  <div id="exchangeImportStatus" class="status"></div>
 </div>
 
 <div class="card" id="historyPanel" hidden>
@@ -526,7 +536,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260916g"></script>
-<script src="ui.js?v=20260916g"></script>
+<script src="app.js?v=20260916h"></script>
+<script src="ui.js?v=20260916h"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFi
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
-  parseRegistryWorkbook, crossCheckRegistry } = window.smivEngine;
+  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -768,14 +768,47 @@ function renderPopulationEditor() {
 }
 
 // ---------- Cross-check กับทะเบียนผู้ป่วย SMI-V จาก HDC Data-Exchange ----------
+// รองรับอัปโหลดหลายไฟล์สะสม (เช่นดาวน์โหลดมาจากหลายหน้า/หลายรายงานของ HDC) — รวมเป็นชุดเดียว
+// ไม่ทับผลของไฟล์ก่อนหน้า เทียบยอดจาก union ของทุกไฟล์ที่โหลดไว้ (ตัดซ้ำด้วย hoscode+pid)
+let loadedRegistryFiles = []; // [{ name, rows }]
+
+function renderLoadedRegistryFiles() {
+  const el = $('#registryFileList');
+  if (!el) return;
+  if (!loadedRegistryFiles.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `ไฟล์ที่โหลดสะสมไว้: ${loadedRegistryFiles.map(f => `${escapeHtml(f.name)} (${fmt(f.rows.length)} แถว)`).join(', ')}
+    — <a href="#" id="clearRegistryFilesLink">ล้างรายการ</a>`;
+  const clearLink = $('#clearRegistryFilesLink');
+  if (clearLink) clearLink.addEventListener('click', e => {
+    e.preventDefault();
+    loadedRegistryFiles = [];
+    renderLoadedRegistryFiles();
+    $('#registryCheckResults').hidden = true;
+    $('#registryCheckStatus').textContent = '';
+  });
+}
+
+function mergedRegistryRows() {
+  const byKey = new Map();
+  for (const f of loadedRegistryFiles) {
+    for (const r of f.rows) byKey.set(`${r.hoscode}|${r.pid}`, r);
+  }
+  return Array.from(byKey.values());
+}
+
 async function handleRegistryCrossCheck(file) {
   const statusEl = $('#registryCheckStatus');
-  statusEl.textContent = 'กำลังอ่านไฟล์ทะเบียน...'; statusEl.className = 'status';
+  statusEl.textContent = `กำลังอ่านไฟล์ ${file.name}...`; statusEl.className = 'status';
   try {
     const wb = await readWorkbook(file);
-    const registryRows = parseRegistryWorkbook(wb);
+    const rows = parseRegistryWorkbook(wb);
+    loadedRegistryFiles = loadedRegistryFiles.filter(f => f.name !== file.name); // อัปโหลดไฟล์ชื่อเดิมซ้ำ = แทนที่ของเดิม ไม่ซ้อน
+    loadedRegistryFiles.push({ name: file.name, rows });
+    renderLoadedRegistryFiles();
+
+    const registryRows = mergedRegistryRows();
     const { registryTotal, importedTotal, missingInImport, extraInImport } = crossCheckRegistry(registryRows);
-    statusEl.textContent = `เทียบยอดแล้ว: ทะเบียน HDC ${fmt(registryTotal)} คน / ข้อมูลที่ import ไว้ ${fmt(importedTotal)} คน`;
+    statusEl.textContent = `เทียบยอดแล้ว (${loadedRegistryFiles.length} ไฟล์รวมกัน): ทะเบียน HDC ${fmt(registryTotal)} คน / ข้อมูลที่ import ไว้ ${fmt(importedTotal)} คน`;
     statusEl.className = 'status ok';
     $('#registryMissingBody').innerHTML = missingInImport.length
       ? missingInImport.slice(0, 200).map(r => `<tr><td>${escapeHtml(r.hoscode)}</td><td>${escapeHtml(r.pid)}</td><td>${escapeHtml(r.name)} ${escapeHtml(r.lname)}</td></tr>`).join('')
@@ -787,8 +820,50 @@ async function handleRegistryCrossCheck(file) {
     $('#registryExtraCount').textContent = `มีในข้อมูลที่ import แต่ไม่พบในทะเบียน HDC (อาจยังไม่อัปเดตที่ HDC หรือ PID ผิด): ${fmt(extraInImport.length)} คน${extraInImport.length > 200 ? ' (แสดง 200 รายการแรก)' : ''}`;
     $('#registryCheckResults').hidden = false;
   } catch (e) {
+    statusEl.textContent = `❌ ${file.name}: ${e.message}`;
+    statusEl.className = 'status error';
+  }
+}
+
+// ---------- Import สำรองจาก HDC Data-Exchange (f_/b_/l_ ppspecial) ----------
+async function handleExchangeDetailedImport(file) {
+  const statusEl = $('#exchangeImportStatus');
+  const fileInput = $('#exchangeImportFile');
+  fileInput.disabled = true;
+  statusEl.textContent = `กำลังอ่านไฟล์ ${file.name}...`; statusEl.className = 'status';
+  try {
+    const wb = await readWorkbook(file);
+    const { patients, warnings } = parseExchangeDetailedWorkbook(wb);
+    if (!patients.length) throw new Error('ไม่พบข้อมูลผู้ป่วยที่อ่านได้ในไฟล์นี้');
+
+    const warnPreview = warnings.length ? `\n\nคำเตือนระหว่างอ่านไฟล์ (${warnings.length} รายการ, ข้ามแถวที่มีปัญหาไปแล้ว):\n${warnings.slice(0, 5).join('\n')}${warnings.length > 5 ? `\n...และอีก ${warnings.length - 5} รายการ` : ''}` : '';
+    const ok = confirm(
+      `⚠️ กำลังจะผสาน (upsert) ผู้ป่วย ${patients.length} คนจากไฟล์ HDC Data-Exchange เข้าระบบ\n\n` +
+      `ไฟล์นี้เก็บได้แค่ 3 จุดต่อคน (ครั้งแรก/ก่อนหน้า/ล่าสุด) — ถ้าผู้ป่วยมารับบริการเกิน 3 ครั้งจริง ` +
+      `จำนวนครั้งและรหัส SMI-V ที่คำนวณได้จะนับขาด ไม่แม่นยำเท่าไฟล์ Data sheet หลัก\n\n` +
+      `PID ที่ซ้ำกับข้อมูลเดิม (hoscode+pid ตรงกัน) จะถูก "ทับ" ด้วยข้อมูลจากไฟล์นี้ (ซึ่งอาจหยาบกว่าของเดิม)${warnPreview}\n\n` +
+      `ยืนยันผสานข้อมูลหรือไม่? (ระบบยังไม่เผยแพร่ให้อัตโนมัติ ต้องกด "เผยแพร่ข้อมูล" เองหลังตรวจสอบแล้ว)`
+    );
+    if (!ok) {
+      statusEl.textContent = '⏸️ ยกเลิกการนำเข้า'; statusEl.className = 'status';
+      return;
+    }
+
+    const map = new Map(state.patients.map(p => [`${p.hoscode}|${p.pid}`, p]));
+    for (const p of patients) map.set(`${p.hoscode}|${p.pid}`, p);
+    state.patients = Array.from(map.values());
+    seedDefaultPopulationNames(currentFy());
+    saveLocal();
+    markDirty();
+    statusEl.textContent = `✅ ผสานข้อมูลแล้ว ${patients.length} คน (รวมทั้งหมด ${state.patients.length} คน) — ตรวจสอบตัวเลขแล้วค่อยกด "เผยแพร่ข้อมูล"`;
+    statusEl.className = 'status ok';
+    render();
+  } catch (e) {
     statusEl.textContent = `❌ ${e.message}`;
     statusEl.className = 'status error';
+  } finally {
+    fileInput.disabled = false;
+    fileInput.value = '';
   }
 }
 
@@ -1402,6 +1477,7 @@ async function init() {
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
   $('#registryFile').addEventListener('change', e => { if (e.target.files[0]) handleRegistryCrossCheck(e.target.files[0]); });
+  $('#exchangeImportFile').addEventListener('change', e => { if (e.target.files[0]) handleExchangeDetailedImport(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => {
     seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor();
     if (!$('#violenceTypeReport').hidden) renderViolenceTypeReport();
