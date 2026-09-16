@@ -214,6 +214,41 @@ test('crossCheckRegistry: หา PID ที่มีในทะเบียน 
   assert.equal(result.extraInImport[0].pid, '2');
 });
 
+test('parseRegistryWorkbook: ดึง hoscode/pid/cid/name/lname ได้ไม่ว่าคอลัมน์อื่นจะมีอะไรบ้าง (ฟอร์แมต HDC ไม่ตายตัว)', () => {
+  const wb = {
+    SheetNames: ['sheet1'],
+    Sheets: { sheet1: [
+      ['hoscode', 'hosname', 'pid', 'cid', 'name', 'lname', 'hn', 'nation', 'vhid', 'typearea', 'discharge', 'fx_all', 'g_code', 'total_visit'],
+      ['10712', 'รพ.ทดสอบ', '543823', '0107xxxxx1234', 'พุดส', 'หลว', '670014971', '099', '49010104', '4', '9', '0', '{}', '1'],
+    ] },
+  };
+  const rows = engine.parseRegistryWorkbook(wb);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].hoscode, '10712');
+  assert.equal(rows[0].pid, '543823');
+  assert.equal(rows[0].cid, '0107xxxxx1234');
+  assert.equal(rows[0].name, 'พุดส');
+});
+
+test('parseRegistryWorkbook: ฟอร์แมตคอลัมน์น้อย (ไม่มี cid/name/lname) ก็อ่านได้ ไม่ throw', () => {
+  const wb = { SheetNames: ['s'], Sheets: { s: [['hoscode', 'pid'], ['10712', '1']] } };
+  const rows = engine.parseRegistryWorkbook(wb);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].cid, '');
+});
+
+test('parseRegistryWorkbook: ไม่มีคอลัมน์ hoscode/pid ต้อง throw บอกชัดว่าไฟล์ไม่ถูกต้อง', () => {
+  const wb = { SheetNames: ['s'], Sheets: { s: [['name', 'lname'], ['a', 'b']] } };
+  assert.throws(() => engine.parseRegistryWorkbook(wb), /hoscode/);
+});
+
+test('parseRegistryWorkbook: แถวที่ hoscode หรือ pid ว่าง ต้องถูกข้าม', () => {
+  const wb = { SheetNames: ['s'], Sheets: { s: [['hoscode', 'pid'], ['10712', ''], ['', '1'], ['10712', '2']] } };
+  const rows = engine.parseRegistryWorkbook(wb);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].pid, '2');
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
