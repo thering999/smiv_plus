@@ -96,6 +96,28 @@ test('exportIssuesXlsx: จำนวนคอลัมน์ของ header ต
   for (const row of dataRows) assert.equal(row.length, headerRow.length, `แถวข้อมูล [${row}] มีจำนวนคอลัมน์ไม่ตรงกับ header`);
 });
 
+test('checkDataQuality: cid ไม่ครบ 13 หลัก/ไม่ใช่ตัวเลข ต้องขึ้น badCid', () => {
+  const patients = [
+    mkPatient({ pid: '1', cid: '1234567890123' }), // 13 หลักถูกต้อง
+    mkPatient({ pid: '2', cid: '123' }), // สั้นเกิน
+    mkPatient({ pid: '3', cid: 'abc1234567890' }), // มีตัวอักษร
+    mkPatient({ pid: '4', cid: '' }), // ว่าง ไม่ถือเป็นปัญหารูปแบบ (คนละเคสกับ missing data)
+  ];
+  const { badCid } = sandbox.checkDataQuality(patients);
+  assert.equal(badCid.length, 2);
+});
+
+test('checkDataQuality: อายุติดลบหรือเกิน 120 ปี ต้องขึ้น badAge', () => {
+  const patients = [
+    mkPatient({ pid: '1', age_at_fy_end: 40 }),
+    mkPatient({ pid: '2', age_at_fy_end: -1 }),
+    mkPatient({ pid: '3', age_at_fy_end: 121 }),
+    mkPatient({ pid: '4', age_at_fy_end: null }),
+  ];
+  const { badAge } = sandbox.checkDataQuality(patients);
+  assert.equal(badAge.length, 2);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',

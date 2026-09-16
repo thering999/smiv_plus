@@ -159,6 +159,27 @@ test('buildYearlyTrendByAmpur: แยกยอดผู้ป่วยใหม�
   assert.equal(other.data[trend.years.indexOf(2568)], 1);
 });
 
+test('buildViolenceTypeDropoutReport: นับเฉพาะผู้ป่วยก่อซ้ำ+ขาดติดตาม>=30วัน และยึดรหัสรุนแรงสุด (1 คน 1 ประเภท)', () => {
+  engine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  const refDate = new Date('2026-06-15');
+  engine.state.patients = [
+    // ก่อซ้ำ + ขาดติดตามพอดี 30 วัน + มีทั้ง 1B030 กับ 1B032 -> ต้องนับเป็น 1B032 (รุนแรงกว่า) เท่านั้น
+    mkPatient({ pid: '1', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B030|1B032', follow_last: '2026-05-16' }),
+    // ก่อซ้ำ แต่ขาดติดตามแค่ 10 วัน -> ไม่เข้าเกณฑ์ ไม่นับ
+    mkPatient({ pid: '2', fiscal_year_be: 2569, has_repeat_violence: true, b03x_raw: '1B030', follow_last: '2026-06-05' }),
+    // ขาดติดตามนาน แต่ไม่ก่อซ้ำ -> ไม่นับ
+    mkPatient({ pid: '3', fiscal_year_be: 2569, has_repeat_violence: false, b03x_raw: '1B031', follow_last: '2026-01-01' }),
+    // ก่อซ้ำ+ขาดติดตามนาน แต่คนละปีงบ -> ไม่นับ
+    mkPatient({ pid: '4', fiscal_year_be: 2568, has_repeat_violence: true, b03x_raw: '1B031', follow_last: '2026-01-01' }),
+  ];
+  const { totalPatients, rows } = engine.buildViolenceTypeDropoutReport(2569, refDate);
+  assert.equal(totalPatients, 1);
+  const v3 = rows.find(r => r.code === '1B032');
+  const v1 = rows.find(r => r.code === '1B030');
+  assert.equal(v3.count, 1);
+  assert.equal(v1.count, 0);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',

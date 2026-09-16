@@ -395,7 +395,7 @@ const VIOLENCE_TYPE_LABELS = {
 const VIOLENCE_TYPE_ORDER = Object.keys(VIOLENCE_TYPE_LABELS); // 1B033 ก่อน = ยึดตัวรุนแรงสุด
 function buildViolenceTypeDropoutReport(fy, refDate) {
   const maxAge = state.settings.max_age_included;
-  const ref = refDate instanceof Date ? refDate : new Date();
+  const ref = refDate && typeof refDate.getTime === 'function' ? refDate : new Date();
   const filtered = state.patients.filter(p => {
     if (p.fiscal_year_be !== fy) return false;
     if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) return false;
