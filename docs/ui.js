@@ -1137,7 +1137,7 @@ function renderProblemPatientsTable() {
       <td>${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
       <td>${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
       <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
-      <td>${escapeHtml(p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
+      <td>${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
       <td>${issues.join(', ')}</td>
     </tr>`).join('');
