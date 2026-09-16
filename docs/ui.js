@@ -864,6 +864,19 @@ function exportReportXlsx(levelOverride) {
   XLSX.writeFile(wb, `smiv_report_${level}_${fy}.xlsx`);
 }
 
+function exportViolenceTypeXlsx() {
+  const fy = currentFy();
+  const { totalPatients, rows } = buildViolenceTypeDropoutReport(fy);
+  const header = [`ตัวชี้วัด HDC 18/3.4 — ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ปีงบประมาณ ${fy}`];
+  const cols = ['ประเภทความรุนแรง', 'จำนวน (คน)'];
+  const data = rows.map(r => [r.label, r.count]);
+  data.push(['รวมทั้งหมด', totalPatients]);
+  const ws = XLSX.utils.aoa_to_sheet([header, [], cols, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ตัวชี้วัด 18');
+  XLSX.writeFile(wb, `smiv_violence_type_dropout_${fy}.xlsx`);
+}
+
 const ISSUE_ACTION_FOR = {
   'ก่อความรุนแรงซ้ำ': 'จัด Conference ทีมสหวิชาชีพ + ทำ Individual Care Plan รายบุคคล เพิ่มความถี่เยี่ยมตามระดับความเสี่ยง',
   'ขาดการติดตาม (follow_last ว่าง)': 'นัดติดตามอาการ/ลงพื้นที่เยี่ยมบ้านโดยเร็ว และลงรหัส 1B037 เมื่อประเมินแล้ว',
@@ -1389,6 +1402,7 @@ async function init() {
     panel.hidden = !panel.hidden;
     if (!panel.hidden) renderViolenceTypeReport();
   });
+  $('#exportViolenceTypeXlsxBtn').addEventListener('click', exportViolenceTypeXlsx);
   $('#clearDataBtn').addEventListener('click', clearAllData);
   $('#saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
   $('#toggleHistoryPanel').addEventListener('click', () => {
