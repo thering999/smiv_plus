@@ -260,6 +260,33 @@ test('validateAndParse: อัปโหลดไฟล์ HDC Data-Exchange ผ�
   assert.throws(() => engine.validateAndParse(wb), /HDC Data-Exchange/);
 });
 
+test('parseExchangeDetailedWorkbook: อ่าน f_/b_/l_ ppspecial ประกอบเป็น date_serv/b03x pipe-list และเลือก ampur จาก check_vhid', () => {
+  const header = ['hoscode', 'hosname', 'pid', 'cid', 'name', 'lname', 'sex', 'birth', 'check_vhid', 'nation', 'f_date_serv', 'f_ppspecial', 'b_date_serv', 'b_ppspecial', 'l_date_serv', 'l_ppspecial'];
+  const wb = { SheetNames: ['s'], Sheets: { s: [
+    header,
+    ['10712', 'รพ.x', '1', 'c1', 'a', 'b', '1', '1990-01-01', '49010104', '099', '2024-10-18', '1B030', '<NA>', '<NA>', '2024-10-18', '1B030'],
+    ['10712', 'รพ.x', '2', 'c2', 'a', 'b', '1', '1990-01-01', '49010104', '099', '2024-10-01', '1B030', '2025-01-06', '1B032', '2025-08-26', '1B031'],
+  ] } };
+  const { patients, warnings } = engine.parseExchangeDetailedWorkbook(wb);
+  assert.equal(patients.length, 2);
+  assert.equal(warnings.length, 0);
+  // แถวที่ 1: มีแค่ f กับ l ที่วันเดียวกัน -> เหลือจุดเดียว, ยังไม่ก่อซ้ำ
+  assert.equal(patients[0].total_visits, 1);
+  assert.equal(patients[0].has_repeat_violence, false);
+  assert.equal(patients[0].ampur, '01');
+  assert.equal(patients[0].chw_addr, '49');
+  // แถวที่ 2: มีครบ 3 จุดต่างวันกัน -> 3 ครั้ง, ก่อซ้ำ (มีมากกว่า 1 รหัส)
+  assert.equal(patients[1].total_visits, 3);
+  assert.equal(patients[1].has_repeat_violence, true);
+  assert.equal(patients[1].b03x_raw, '1B030|1B032|1B031');
+  assert.equal(patients[1].follow_last, '2025-08-26');
+});
+
+test('parseExchangeDetailedWorkbook: ไม่มีคอลัมน์ f_date_serv/f_ppspecial ต้อง throw', () => {
+  const wb = { SheetNames: ['s'], Sheets: { s: [['hoscode', 'pid'], ['1', '1']] } };
+  assert.throws(() => engine.parseExchangeDetailedWorkbook(wb), /f_date_serv/);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
