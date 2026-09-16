@@ -249,6 +249,17 @@ test('parseRegistryWorkbook: แถวที่ hoscode หรือ pid ว่�
   assert.equal(rows[0].pid, '2');
 });
 
+test('validateAndParse: อัปโหลดไฟล์ HDC Data-Exchange ผิดช่อง ต้องเตือนให้ไปใช้ช่อง cross-check แทน', () => {
+  const wb = {
+    SheetNames: ['sheet1'],
+    Sheets: { sheet1: [
+      ['hoscode', 'hosname', 'pid', 'cid', 'name', 'lname', 'hn', 'birth', 'sex', 'nation', 'vhid', 'typearea', 'discharge', 'fx_all', 'g_code', 'total_visit'],
+      ['10712', 'x', '1', '2', 'a', 'b', '3', '2530-01-01', '1', '099', '49010104', '4', '9', '0', '{}', '1'],
+    ] },
+  };
+  assert.throws(() => engine.validateAndParse(wb), /HDC Data-Exchange/);
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',
