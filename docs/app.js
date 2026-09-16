@@ -442,6 +442,40 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
   return { fy, level, totalPatients: filtered.length, totalsByType: countByViolenceType(filtered), areas };
 }
 
+// ---------- Cross-check กับทะเบียนผู้ป่วย SMI-V จาก HDC Data-Exchange ----------
+// ทะเบียนนี้เป็น export แบบ "รายประชากร" (1 แถวต่อคน ล่าสุด) คอลัมน์: hoscode, hosname, pid, cid,
+// name, lname, hn, birth, sex, nation, vhid, typearea, discharge, fx_all, g_code, total_visit
+// ข้อมูลหยาบกว่าไฟล์ Data sheet หลัก (ไม่มีประวัติครบทุกครั้ง) จึงใช้แค่ "เทียบยอดไขว้" ว่า
+// PID ในไฟล์ที่ import ไว้ ครบ/ตรงกับทะเบียนกลางของ HDC ไหม ไม่ใช้แทนที่การ import หลัก
+const REGISTRY_EXPECTED_HEADERS = ['hoscode','hosname','pid','cid','name','lname','hn','birth','sex','nation','vhid','typearea','discharge','fx_all','g_code','total_visit'];
+function parseRegistryWorkbook(wb) {
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+  if (!rows.length) throw new Error('ชีตไม่มีข้อมูล (แถวว่าง)');
+  const header = rows[0].map(h => String(h).trim().toLowerCase());
+  const missingCols = REGISTRY_EXPECTED_HEADERS.filter(h => !header.includes(h));
+  if (missingCols.length) throw new Error(`ไฟล์ทะเบียนไม่มีคอลัมน์: ${missingCols.join(', ')} (ต้องเป็นไฟล์ export จาก HDC Data-Exchange ทะเบียนผู้ป่วย SMIV)`);
+  const idx = {};
+  REGISTRY_EXPECTED_HEADERS.forEach(h => { idx[h] = header.indexOf(h); });
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const hoscode = String(row[idx.hoscode] || '').trim();
+    const pid = String(row[idx.pid] || '').trim();
+    if (!hoscode || !pid) continue;
+    out.push({ hoscode, pid, cid: String(row[idx.cid] || '').trim(), name: String(row[idx.name] || '').trim(), lname: String(row[idx.lname] || '').trim() });
+  }
+  return out;
+}
+function crossCheckRegistry(registryRows) {
+  const importedKeys = new Set(state.patients.map(p => `${p.hoscode}|${p.pid}`));
+  const registryKeys = new Set(registryRows.map(r => `${r.hoscode}|${r.pid}`));
+  const missingInImport = registryRows.filter(r => !importedKeys.has(`${r.hoscode}|${r.pid}`));
+  const extraInImport = state.patients.filter(p => !registryKeys.has(`${p.hoscode}|${p.pid}`));
+  return { registryTotal: registryRows.length, importedTotal: state.patients.length, missingInImport, extraInImport };
+}
+
 // ---------- export ----------
 window.smivEngine = {
   state, readWorkbook, validateAndParse, buildReport, analyzeArea,
@@ -449,6 +483,7 @@ window.smivEngine = {
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
+  parseRegistryWorkbook, crossCheckRegistry,
 };
 
 })();

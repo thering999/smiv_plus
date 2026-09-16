@@ -196,6 +196,24 @@ test('buildViolenceTypeDropoutReportByArea: แยกยอดตามอำเ
   assert.equal(areas.reduce((s, a) => s + a.total, 0), totalPatients);
 });
 
+test('crossCheckRegistry: หา PID ที่มีในทะเบียน HDC แต่ขาดใน import และกลับกัน โดยเทียบ hoscode+pid', () => {
+  engine.state.patients = [
+    mkPatient({ pid: '1', hoscode: 'H1' }), // มีทั้งสองฝั่ง
+    mkPatient({ pid: '2', hoscode: 'H1' }), // มีเฉพาะใน import (ไม่พบในทะเบียน)
+  ];
+  const registryRows = [
+    { hoscode: 'H1', pid: '1', cid: 'x', name: 'a', lname: 'b' },
+    { hoscode: 'H1', pid: '3', cid: 'y', name: 'c', lname: 'd' }, // มีเฉพาะในทะเบียน (ขาดใน import)
+  ];
+  const result = engine.crossCheckRegistry(registryRows);
+  assert.equal(result.registryTotal, 2);
+  assert.equal(result.importedTotal, 2);
+  assert.equal(result.missingInImport.length, 1);
+  assert.equal(result.missingInImport[0].pid, '3');
+  assert.equal(result.extraInImport.length, 1);
+  assert.equal(result.extraInImport[0].pid, '2');
+});
+
 function mkPatient(overrides = {}) {
   return {
     hoscode: 'H1', hosname: 'โรงพยาบาลทดสอบ', pid: 'P1', cid: '1', name: 'ทดสอบ', lname: 'ระบบ',

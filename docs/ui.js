@@ -5,7 +5,8 @@
 const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFindingsByCategory,
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
-  buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea } = window.smivEngine;
+  buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
+  parseRegistryWorkbook, crossCheckRegistry } = window.smivEngine;
 
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
@@ -766,6 +767,31 @@ function renderPopulationEditor() {
   }
 }
 
+// ---------- Cross-check กับทะเบียนผู้ป่วย SMI-V จาก HDC Data-Exchange ----------
+async function handleRegistryCrossCheck(file) {
+  const statusEl = $('#registryCheckStatus');
+  statusEl.textContent = 'กำลังอ่านไฟล์ทะเบียน...'; statusEl.className = 'status';
+  try {
+    const wb = await readWorkbook(file);
+    const registryRows = parseRegistryWorkbook(wb);
+    const { registryTotal, importedTotal, missingInImport, extraInImport } = crossCheckRegistry(registryRows);
+    statusEl.textContent = `เทียบยอดแล้ว: ทะเบียน HDC ${fmt(registryTotal)} คน / ข้อมูลที่ import ไว้ ${fmt(importedTotal)} คน`;
+    statusEl.className = 'status ok';
+    $('#registryMissingBody').innerHTML = missingInImport.length
+      ? missingInImport.slice(0, 200).map(r => `<tr><td>${escapeHtml(r.hoscode)}</td><td>${escapeHtml(r.pid)}</td><td>${escapeHtml(r.name)} ${escapeHtml(r.lname)}</td></tr>`).join('')
+      : `<tr><td colspan="3">ไม่มี — PID ในทะเบียน HDC มีอยู่ในข้อมูลที่ import ครบทุกคน</td></tr>`;
+    $('#registryMissingCount').textContent = `พบใน HDC แต่ไม่มีในข้อมูลที่ import: ${fmt(missingInImport.length)} คน${missingInImport.length > 200 ? ' (แสดง 200 รายการแรก)' : ''}`;
+    $('#registryExtraBody').innerHTML = extraInImport.length
+      ? extraInImport.slice(0, 200).map(p => `<tr><td>${escapeHtml(p.hoscode)}</td><td>${escapeHtml(p.pid)}</td><td>${escapeHtml(p.name)} ${escapeHtml(p.lname)}</td></tr>`).join('')
+      : `<tr><td colspan="3">ไม่มี — ทุกคนที่ import ไว้พบในทะเบียน HDC</td></tr>`;
+    $('#registryExtraCount').textContent = `มีในข้อมูลที่ import แต่ไม่พบในทะเบียน HDC (อาจยังไม่อัปเดตที่ HDC หรือ PID ผิด): ${fmt(extraInImport.length)} คน${extraInImport.length > 200 ? ' (แสดง 200 รายการแรก)' : ''}`;
+    $('#registryCheckResults').hidden = false;
+  } catch (e) {
+    statusEl.textContent = `❌ ${e.message}`;
+    statusEl.className = 'status error';
+  }
+}
+
 // ---------- ตัวชี้วัด 18/3.4: ขาดการรักษาก่อความรุนแรงซ้ำ จำแนกตามประเภทความรุนแรง ----------
 // สเปก HDC ระบุให้แสดงผลระดับหน่วยงาน/พื้นที่ + ระดับหน่วยบริการ (ไม่ใช่แค่ตัวเลขรวมจังหวัดเดียว)
 function renderViolenceTypeReport() {
@@ -1375,6 +1401,7 @@ async function init() {
   });
 
   $('#xlsxFile').addEventListener('change', e => { if (e.target.files[0]) handleUpload(e.target.files[0]); });
+  $('#registryFile').addEventListener('change', e => { if (e.target.files[0]) handleRegistryCrossCheck(e.target.files[0]); });
   $('#fySelect').addEventListener('change', () => {
     seedDefaultPopulationNames(currentFy()); render(); renderPopulationEditor();
     if (!$('#violenceTypeReport').hidden) renderViolenceTypeReport();

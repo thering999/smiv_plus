@@ -119,6 +119,26 @@
   </div>
 </div>
 
+<div class="card" id="registryCheckCard">
+  <h2 style="margin-top:0;border:none;padding-left:0">🔍 เทียบยอดกับทะเบียน SMI-V (HDC Data-Exchange)</h2>
+  <p class="note">อัปโหลดไฟล์ export จากหน้า HDC Data-Exchange "ทะเบียนผู้ป่วย SMIV" (.xlsx) เพื่อเช็คว่า PID ที่มีในทะเบียนกลาง
+    ตรงกับข้อมูลที่ import ไว้ในระบบนี้ครบไหม — ใช้เทียบยอดไขว้เท่านั้น ไม่ใช้แทนการ import หลัก (ทะเบียนนี้ไม่มีประวัติการมาครบทุกครั้ง)</p>
+  <input type="file" id="registryFile" accept=".xlsx">
+  <div id="registryCheckStatus" class="status"></div>
+  <div id="registryCheckResults" hidden style="margin-top:14px">
+    <p class="note" id="registryMissingCount"></p>
+    <table class="report-table" style="max-width:700px">
+      <thead><tr><th>hoscode</th><th>pid</th><th>ชื่อ-สกุล</th></tr></thead>
+      <tbody id="registryMissingBody"></tbody>
+    </table>
+    <p class="note" id="registryExtraCount" style="margin-top:14px"></p>
+    <table class="report-table" style="max-width:700px">
+      <thead><tr><th>hoscode</th><th>pid</th><th>ชื่อ-สกุล</th></tr></thead>
+      <tbody id="registryExtraBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div class="card" id="historyPanel" hidden>
   <h2 style="margin-top:0;border:none;padding-left:0">📜 ประวัติการนำเข้า</h2>
   <p class="note">ทุกครั้งที่เผยแพร่เข้า GitHub ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">15</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน</p>
@@ -506,7 +526,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260916c"></script>
-<script src="ui.js?v=20260916c"></script>
+<script src="app.js?v=20260916d"></script>
+<script src="ui.js?v=20260916d"></script>
 </body>
 </html>
