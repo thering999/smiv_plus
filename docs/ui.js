@@ -8,6 +8,9 @@ const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFi
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
   parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook } = window.smivEngine;
 
+// ลดพื้นที่ว่างของกราฟทุกตัว (ค่า default ของ Chart.js สูงเกินไปเมื่อมีข้อมูลน้อยจุด เช่น trend ปีเดียว)
+if (typeof Chart !== 'undefined') Chart.defaults.aspectRatio = 2.2;
+
 const LS_KEY = 'smivplus_state_v1';
 let unpublishedChanges = false;
 function markDirty() {
