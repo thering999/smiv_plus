@@ -301,6 +301,8 @@ function analyzeArea(r) {
 
   if (r.h === 0) {
     findings.push({ level: 'warn', category: 'no_population', title: 'ยังไม่มีข้อมูลประชากร (H)', detail: 'ไม่สามารถคำนวณอัตราเข้าถึงบริการ (E) และผู้ป่วยประมาณการณ์ (I) ได้ เพราะยังไม่กรอกประชากร 15-60 ปีของพื้นที่นี้', action: 'กรอกข้อมูลประชากรที่ปุ่ม "ประชากร/ประมาณการณ์"' });
+  } else if (r.e > 100) {
+    findings.push({ level: 'warn', category: 'e_over_100', title: `อัตราเข้าถึงบริการเกิน 100% (${r.e}%) — ผิดปกติ`, detail: `ผู้ป่วยสะสม (D=${d}) มากกว่าผู้ป่วยประมาณการณ์ (I=${r.i}) ซึ่งไม่ควรเกิดขึ้นจริง มักเกิดจากค่าประชากร (H) ที่กรอกไว้ต่ำเกินไปหรือยังไม่ได้กรอกของปีงบนี้`, action: 'ตรวจสอบและแก้ไขค่าประชากร (H) ของปีงบนี้ที่ปุ่ม "ประชากร/ประมาณการณ์" ให้ถูกต้อง' });
   } else if (r.e < TARGET_ACCESS_RATE) {
     findings.push({ level: 'danger', category: 'low_access', title: `อัตราเข้าถึงบริการต่ำกว่าเป้า (${r.e}% < ${TARGET_ACCESS_RATE}%)`, detail: 'จำนวนผู้ป่วย SMI-V ที่ลงทะเบียนแล้ว (D) เทียบกับผู้ป่วยประมาณการณ์ (I) ยังไม่ถึงเป้าหมาย HDC', action: 'เร่งคัดกรอง 5 สัญญาณเตือน (V-Care) และตรวจสอบว่าส่งข้อมูล 1B030-1B033 เข้า HDC ครบหรือไม่ (ดูหน้าคู่มือรหัส)' });
   }
@@ -322,7 +324,7 @@ function analyzeArea(r) {
   return findings;
 }
 
-const FINDING_CATEGORY_LABELS = { no_population:'ยังไม่มีข้อมูลประชากร', low_access:'เข้าถึงบริการต่ำกว่าเป้า', high_repeat:'ก่อความรุนแรงซ้ำสูง', low_followup:'ไม่เคยติดตามซ้ำสูง', data_quality:'ข้อมูลไม่ครบถ้วน', same_day:'สงสัยลงรหัสผิด' };
+const FINDING_CATEGORY_LABELS = { no_population:'ยังไม่มีข้อมูลประชากร', e_over_100:'อัตราเข้าถึงบริการเกิน 100% ผิดปกติ', low_access:'เข้าถึงบริการต่ำกว่าเป้า', high_repeat:'ก่อความรุนแรงซ้ำสูง', low_followup:'ไม่เคยติดตามซ้ำสูง', data_quality:'ข้อมูลไม่ครบถ้วน', same_day:'สงสัยลงรหัสผิด' };
 
 function countFindingsByCategory(analysisList) {
   const counts = {};
