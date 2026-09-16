@@ -438,17 +438,18 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
   const filtered = filterViolenceDropout(fy, refDate);
   const groups = new Map();
   for (const p of filtered) {
-    const key = groupKeyFor(p, level);
+    // อำเภอที่ไม่รู้จัก (ไม่ใช่ 7 อำเภอหลักของจังหวัด) รวมเป็น "อื่นๆ" แทนที่จะโชว์รหัสดิบ — ตรงกับ buildReport() หลัก
+    const key = level === 'ampur' && !KNOWN_AMPUR[p.ampur] ? 'other' : groupKeyFor(p, level);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
   const areas = Array.from(groups.entries()).map(([key, ps]) => {
     let label = key;
-    if (level === 'ampur') label = KNOWN_AMPUR[key] || key;
+    if (level === 'ampur') label = key === 'other' ? 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)' : (KNOWN_AMPUR[key] || key);
     else if (level === 'hoscode') label = ps.find(p => p.hosname)?.hosname || key;
     return { key, label, rows: countByViolenceType(ps), total: ps.length };
   });
-  areas.sort((a, b) => b.total - a.total);
+  areas.sort((a, b) => (a.key === 'other') - (b.key === 'other') || b.total - a.total);
   return { fy, level, totalPatients: filtered.length, totalsByType: countByViolenceType(filtered), areas };
 }
 
