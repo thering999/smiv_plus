@@ -210,7 +210,7 @@ test('buildViolenceTypeDropoutReportByArea: อำเภอที่ไม่ร
   const other = areas.find(a => a.key === 'other');
   assert.ok(other);
   assert.equal(other.total, 2);
-  assert.equal(other.label, 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)');
+  assert.equal(other.label, 'นอกจังหวัดมุกดาหาร');
 });
 
 test('crossCheckRegistry: หา PID ที่มีในทะเบียน HDC แต่ขาดใน import และกลับกัน โดยเทียบ hoscode+pid', () => {

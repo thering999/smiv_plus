@@ -225,7 +225,7 @@ function buildReport(fy, level, dateFrom, dateTo) {
     const known = rows.filter(r => pop[r.ampur_ref]);
     const unknown = rows.filter(r => !pop[r.ampur_ref]);
     rows = known;
-    if (unknown.length) rows.push({ group_key: 'other', label: 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)', ampur_ref: null, patients: unknown.flatMap(r => r.patients) });
+    if (unknown.length) rows.push({ group_key: 'other', label: 'นอกจังหวัดมุกดาหาร', ampur_ref: null, patients: unknown.flatMap(r => r.patients) });
   } else if (level === 'chw_addr') {
     rows.sort((a, b) => b.patients.length - a.patients.length);
     const keep = rows.slice(0, 8), rest = rows.slice(8);
@@ -445,7 +445,7 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
   }
   const areas = Array.from(groups.entries()).map(([key, ps]) => {
     let label = key;
-    if (level === 'ampur') label = key === 'other' ? 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)' : (KNOWN_AMPUR[key] || key);
+    if (level === 'ampur') label = key === 'other' ? 'นอกจังหวัดมุกดาหาร' : (KNOWN_AMPUR[key] || key);
     else if (level === 'hoscode') label = ps.find(p => p.hosname)?.hosname || key;
     return { key, label, rows: countByViolenceType(ps), total: ps.length };
   });
