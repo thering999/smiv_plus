@@ -344,7 +344,7 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
             if (isset($pop[$r['ampur_ref']])) $known[] = $r; else $unknown[] = $r;
         }
         $rows = $known;
-        if ($unknown) $rows[] = merge_rows_into_bucket($unknown, $numericCols, 'other', 'อื่นๆ (นอกอำเภอ/ข้อมูลนอกพื้นที่)');
+        if ($unknown) $rows[] = merge_rows_into_bucket($unknown, $numericCols, 'other', 'นอกจังหวัดมุกดาหาร');
     } elseif ($level === 'chw_addr') {
         usort($rows, fn($a, $b) => $b['d'] <=> $a['d']);
         $keep = array_slice($rows, 0, 8);
