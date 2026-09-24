@@ -74,14 +74,29 @@ require __DIR__ . '/includes/header.php';
 ?>
 <h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
 <?php if ($lastImport): ?>
-  <p class="note">ข้อมูลล่าสุด: นำเข้าเมื่อ <?= htmlspecialchars($lastImport['imported_at']) ?> จากไฟล์ <?= htmlspecialchars($lastImport['filename']) ?> (<?= number_format($lastImport['row_count']) ?> แถว) · เปิดหน้านี้เมื่อ <?= date('Y-m-d H:i') ?></p>
+  <p class="note">ข้อมูลล่าสุด: นำเข้าเมื่อ <?= htmlspecialchars($lastImport['imported_at']) ?> จากไฟล์ <?= htmlspecialchars($lastImport['filename']) ?> (<?= number_format($lastImport['row_count']) ?> แถว)</p>
 <?php else: ?>
   <p class="alert">ยังไม่เคยนำเข้าข้อมูล — ใช้เมนู "นำเข้าข้อมูล Excel" ด้านล่าง</p>
 <?php endif; ?>
 
+<form method="get" class="filter-bar">
+  <label>ปีงบประมาณ (พ.ศ.)</label>
+  <input type="number" name="fy" value="<?= (int) $fy ?>" min="2560" max="2600">
+  <label>มุมมอง</label>
+  <select name="level" onchange="this.form.area.value=''; this.form.submit()">
+    <?php foreach (REPORT_LEVELS as $lv => $lbl): ?>
+      <option value="<?= $lv ?>" <?= $lv === $level ? 'selected' : '' ?>><?= htmlspecialchars($lbl) ?></option>
+    <?php endforeach; ?>
+  </select>
+  <label>ช่วงวันที่</label>
+  <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom ?? '') ?>">
+  <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo ?? '') ?>">
+  <button type="submit">แสดงผล</button>
+</form>
+
 <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
 <details class="table-details" <?= ($importMessage || $importError) ? 'open' : '' ?>>
-<summary>นำเข้าข้อมูล Excel (exchange_file.xlsx)</summary>
+<summary>📁 นำเข้าข้อมูล Excel (exchange_file.xlsx)</summary>
 <?php if ($importMessage): ?><div class="alert alert-success"><?= htmlspecialchars($importMessage) ?></div><?php endif; ?>
 <?php if ($importError): ?><div class="alert"><pre style="white-space:pre-wrap;margin:0"><?= htmlspecialchars($importError) ?></pre></div><?php endif; ?>
 <form method="post" enctype="multipart/form-data" class="card" style="margin-top:10px">
@@ -94,17 +109,9 @@ require __DIR__ . '/includes/header.php';
 </details>
 <?php endif; ?>
 
-<form method="get" class="filter-bar">
-  <label>ปีงบประมาณ (พ.ศ.)</label>
-  <input type="number" name="fy" value="<?= (int) $fy ?>" min="2560" max="2600">
-  <label>มุมมอง</label>
-  <select name="level" onchange="this.form.area.value=''; this.form.submit()">
-    <?php foreach (REPORT_LEVELS as $lv => $lbl): ?>
-      <option value="<?= $lv ?>" <?= $lv === $level ? 'selected' : '' ?>><?= htmlspecialchars($lbl) ?></option>
-    <?php endforeach; ?>
-  </select>
-  <label>เลือก<?= htmlspecialchars($areaLabel) ?></label>
-  <select name="area">
+<?php if (!$report): ?>
+<p class="alert">ไม่มีข้อมูล — นำเข้าไฟล์ Excel ก่อน</p>
+<?php else: ?>
     <option value="">— ทั้งหมด —</option>
     <?php foreach ($areaOptions as $opt): ?>
       <option value="<?= htmlspecialchars($opt['group_key']) ?>" <?= $areaFilter === (string) $opt['group_key'] ? 'selected' : '' ?>>
