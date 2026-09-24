@@ -334,6 +334,28 @@ function build_sex_distribution(PDO $pdo, int $fy): array
     return $result;
 }
 
+// ส่ง email alert ถึง admin (fail-soft — log only, don't break app)
+function send_alert_email(array $alert, string $appName = 'SMI-V Plus'): bool
+{
+    $adminEmail = getenv('ALERT_EMAIL') ?: '';
+    if (!$adminEmail || !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) return false;
+
+    $subject = "[{$appName}] การแจ้งเตือน: " . htmlspecialchars($alert['alert_type']);
+    $body = "การแจ้งเตือนใหม่:\n\n"
+        . "พื้นที่: " . htmlspecialchars($alert['ampur']) . "\n"
+        . "ประเภท: " . htmlspecialchars($alert['alert_type']) . "\n"
+        . "ข้อความ: " . htmlspecialchars($alert['message']) . "\n"
+        . "เกณฑ์: " . $alert['threshold'] . " | ค่าปัจจุบัน: " . $alert['metric_value'] . "\n\n"
+        . "ดูรายละเอียด: http://localhost/smiv_plus/alert.php?fy=" . $alert['fiscal_year_be'] . "\n";
+
+    $headers = "Content-Type: text/plain; charset=utf-8\r\n";
+    $headers .= "From: noreply@smiv-plus.local\r\n";
+
+    $sent = @mail($adminEmail, $subject, $body, $headers);
+    if (!$sent) error_log("Alert email attempt: {$alert['ampur']} | {$alert['alert_type']} (may not be configured)");
+    return $sent;
+}
+
 const REPORT_LEVELS = [
     'ampur' => 'รายอำเภอ',
     'hoscode' => 'รายหน่วยบริการ',

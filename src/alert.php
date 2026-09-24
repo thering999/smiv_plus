@@ -81,7 +81,7 @@ foreach ($report as $r) {
     }
 }
 
-// Insert new alerts (avoid duplicates)
+// Insert new alerts (avoid duplicates) + send email
 foreach ($newAlerts as $alert) {
     $exists = $pdo->prepare(
         "SELECT 1 FROM alerts
@@ -98,6 +98,7 @@ foreach ($newAlerts as $alert) {
             $alert['ampur'], $alert['alert_type'], $alert['message'], $alert['severity'],
             $fy, $alert['metric_value'], $alert['threshold']
         ]);
+        send_alert_email($alert);
     }
 }
 

@@ -39,6 +39,9 @@ require __DIR__ . '/includes/header.php';
   <?php if ($dateFrom || $dateTo): ?>
   <a href="<?= url('/action_list.php') ?>" class="btn-secondary">ล้างตัวกรอง</a>
   <?php endif; ?>
+  <?php if ($patients): ?>
+  <a href="<?= url('/export_patients.php?fy=' . $fy . '&level=' . $level . ($area ? '&area=' . urlencode($area) : '') . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '')) ?>" class="btn-export">📥 Export CSV</a>
+  <?php endif; ?>
 </form>
 
 <?php if (!$patients): ?>
@@ -105,6 +108,8 @@ tr.priority-กลาง { background-color: #fff3e0; }
 tr.priority-ปกติ { background-color: #f9f9f9; }
 .btn-secondary { display: inline-block; padding: 0.5rem 1rem; background: #999; color: white; text-decoration: none; border-radius: 4px; }
 .btn-secondary:hover { background: #666; }
+.btn-export { display: inline-block; padding: 0.5rem 1rem; background: #1976d2; color: white; text-decoration: none; border-radius: 4px; }
+.btn-export:hover { background: #1565c0; }
 </style>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>
