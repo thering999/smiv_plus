@@ -6,7 +6,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 
-$adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'settings_edit.php'];
+$adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'settings_edit.php', 'intervention_tracker.php', 'report_scheduler.php'];
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -27,6 +27,9 @@ $adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'setting
     <a href="<?= url('/action_list.php') ?>" class="<?= $current === 'action_list.php' ? 'active' : '' ?>">รายชื่อต้องติดตาม</a>
     <a href="<?= url('/alert.php') ?>" class="<?= $current === 'alert.php' ? 'active' : '' ?>">การแจ้งเตือน</a>
     <a href="<?= url('/benchmark.php') ?>" class="<?= $current === 'benchmark.php' ? 'active' : '' ?>">เปรียบเทียบผลงาน</a>
+    <a href="<?= url('/district_map.php') ?>" class="<?= $current === 'district_map.php' ? 'active' : '' ?>">แผนที่ความร้อน</a>
+    <a href="<?= url('/forecast.php') ?>" class="<?= $current === 'forecast.php' ? 'active' : '' ?>">ประมาณการ</a>
+    <a href="<?= url('/data_audit.php') ?>" class="<?= $current === 'data_audit.php' ? 'active' : '' ?>">ตรวจสอบข้อมูล</a>
     <a href="<?= url('/reference.php') ?>" class="<?= $current === 'reference.php' ? 'active' : '' ?>">คู่มือรหัส</a>
     <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
       <div class="nav-dropdown">
@@ -34,6 +37,8 @@ $adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'setting
         <div class="nav-dropdown-menu">
           <a href="<?= url('/import_upload.php') ?>" class="<?= $current === 'import_upload.php' ? 'active' : '' ?>">นำเข้า Excel</a>
           <a href="<?= url('/population_edit.php') ?>" class="<?= $current === 'population_edit.php' ? 'active' : '' ?>">ประชากร/ประมาณการณ์ (H,I)</a>
+          <a href="<?= url('/intervention_tracker.php') ?>" class="<?= $current === 'intervention_tracker.php' ? 'active' : '' ?>">ติดตามแทรกแซง</a>
+          <a href="<?= url('/report_scheduler.php') ?>" class="<?= $current === 'report_scheduler.php' ? 'active' : '' ?>">ตัวกำหนดการรายงาน</a>
           <a href="<?= url('/settings_edit.php') ?>" class="<?= $current === 'settings_edit.php' ? 'active' : '' ?>">ตั้งค่ารหัสก่อความรุนแรงซ้ำ</a>
           <a href="<?= url('/users.php') ?>" class="<?= $current === 'users.php' ? 'active' : '' ?>">ผู้ใช้งาน</a>
         </div>
