@@ -274,6 +274,66 @@ function build_extra_charts(PDO $pdo, int $fy): array
     return ['sex' => $sex, 'trend' => $trend];
 }
 
+// แนวโน้มจำนวนผู้ป่วยใหม่รายเดือน (12 เดือนล่าสุดของปีงบ)
+function build_monthly_trend(PDO $pdo, int $fy): array
+{
+    $ceYearEnd = $fy - 543;
+    $rangeStart = date('Y-m-01', strtotime(($ceYearEnd - 1) . '-10-01'));
+    $rangeEnd = date('Y-m-t', strtotime($ceYearEnd . '-09-30'));
+
+    $stmt = $pdo->prepare(
+        "SELECT TO_CHAR(first_date_serv, 'YYYY-MM') AS ym, COUNT(*) c
+         FROM patients
+         WHERE fiscal_year_be = ? AND first_date_serv BETWEEN ? AND ?
+         GROUP BY ym ORDER BY ym"
+    );
+    $stmt->execute([$fy, $rangeStart, $rangeEnd]);
+    $trend = [];
+    foreach ($stmt as $r) $trend[$r['ym']] = (int) $r['c'];
+    return $trend;
+}
+
+// แนวโน้มอัตราเข้าถึงบริการข้ามปีงบ
+function build_access_rate_trend(PDO $pdo): array
+{
+    $fyStmt = $pdo->prepare('SELECT DISTINCT fiscal_year_be FROM patients ORDER BY fiscal_year_be');
+    $fyStmt->execute();
+    $years = [];
+    $rates = [];
+    foreach ($fyStmt as $r) {
+        $fy = (int) $r['fiscal_year_be'];
+        $popStmt = $pdo->prepare('SELECT SUM(population_15_60) total FROM population_estimates WHERE fiscal_year_be = ?');
+        $popStmt->execute([$fy]);
+        $totalPop = (int) ($popStmt->fetchColumn() ?? 0);
+        if ($totalPop === 0) continue;
+
+        $patStmt = $pdo->prepare('SELECT COUNT(*) FROM patients WHERE fiscal_year_be <= ? AND age_at_fy_end <= ?');
+        $patStmt->execute([$fy, max_age_included($pdo)]);
+        $totalPat = (int) ($patStmt->fetchColumn() ?? 0);
+
+        $estimated = estimate_smiv_patients($pdo, $totalPop);
+        $rate = $estimated > 0 ? pct($totalPat, $estimated) : 0;
+
+        $years[] = $fy;
+        $rates[] = $rate;
+    }
+    return ['years' => $years, 'rates' => $rates];
+}
+
+// สัดส่วนเพศ
+function build_sex_distribution(PDO $pdo, int $fy): array
+{
+    $stmt = $pdo->prepare('SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? GROUP BY sex');
+    $stmt->execute([$fy]);
+    $result = ['ชาย' => 0, 'หญิง' => 0, 'ไม่ระบุ' => 0];
+    foreach ($stmt as $r) {
+        if ((int) $r['sex'] === 1) $result['ชาย'] += (int) $r['c'];
+        elseif ((int) $r['sex'] === 2) $result['หญิง'] += (int) $r['c'];
+        else $result['ไม่ระบุ'] += (int) $r['c'];
+    }
+    return $result;
+}
+
 const REPORT_LEVELS = [
     'ampur' => 'รายอำเภอ',
     'hoscode' => 'รายหน่วยบริการ',
@@ -288,10 +348,14 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
     if (!isset(REPORT_LEVELS[$level])) $level = 'ampur';
     $maxAge = max_age_included($pdo);
 
+    // ระดับ ampur ต้อง group ด้วย (ampur, chw_addr) คู่กัน เพราะรหัสอำเภอ 2 หลักซ้ำกันได้ข้ามจังหวัด
+    // (เช่น '01' คือทั้งเมืองมุกดาหารและอำเภอเมืองของจังหวัดอื่น) ถ้า group ด้วย ampur อย่างเดียวจะปนข้อมูลข้ามจังหวัดโดยไม่รู้ตัว
     $groupCol = $level === 'hoscode' ? 'p.hoscode' : ($level === 'chw_addr' ? 'p.chw_addr' : 'p.ampur');
+    $groupByCol = $level === 'ampur' ? 'p.ampur, p.chw_addr' : $groupCol;
     $labelCol = $level === 'hoscode' ? 'MAX(p.hosname)' : ($level === 'chw_addr' ? "CONCAT('จังหวัดรหัส ', p.chw_addr)" : 'p.ampur');
     // ใช้ระบุอำเภอตัวแทนของกลุ่ม เพื่อจับคู่ข้อมูลประชากร (มีความหมายเฉพาะระดับ ampur/hoscode)
     $ampurRefCol = $level === 'hoscode' ? 'MIN(p.ampur)' : ($level === 'chw_addr' ? "''" : 'p.ampur');
+    $chwRefCol = $level === 'ampur' ? 'p.chw_addr' : ($level === 'hoscode' ? 'MIN(p.chw_addr)' : "''");
 
     $params = ['fy1' => $fy, 'fy2' => $fy, 'fy3' => $fy, 'max_age' => $maxAge];
     $dateFilterSql = '';
@@ -302,7 +366,7 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
     }
 
     $stmt = $pdo->prepare(
-        "SELECT $groupCol AS group_key, $labelCol AS label, $ampurRefCol AS ampur_ref,
+        "SELECT $groupCol AS group_key, $labelCol AS label, $ampurRefCol AS ampur_ref, $chwRefCol AS chw_ref,
             SUM(CASE WHEN p.fiscal_year_be < :fy1 THEN 1 ELSE 0 END) AS b,
             SUM(CASE WHEN p.fiscal_year_be = :fy2 THEN 1 ELSE 0 END) AS c,
             COUNT(*) AS d,
@@ -325,7 +389,7 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
          WHERE p.fiscal_year_be <= :fy3
            AND (p.age_at_fy_end IS NULL OR p.age_at_fy_end <= :max_age)
            $dateFilterSql
-         GROUP BY $groupCol
+         GROUP BY $groupByCol
          ORDER BY d DESC"
     );
     $stmt->execute($params);
@@ -339,12 +403,19 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
     // รวมกลุ่มที่ไม่ใช่พื้นที่หลักเป็น "อื่นๆ" เพื่อไม่ให้กราฟรกด้วย code แปลกปลอม/จำนวนน้อย
     $numericCols = ['b', 'c', 'd', 'f', 'j', 'k', 'm', 'n', 'zero_followup', 'repeat_violence_count', 'missing_birth', 'missing_tambon', 'missing_followup', 'same_day_followup'];
     if ($level === 'ampur') {
-        $known = $unknown = [];
+        $known = $unknownInProvince = $unknownOutProvince = [];
         foreach ($rows as $r) {
-            if (isset($pop[$r['ampur_ref']])) $known[] = $r; else $unknown[] = $r;
+            if (isset($pop[$r['ampur_ref']]) && $r['chw_ref'] === '49') {
+                $known[] = $r;
+            } elseif ($r['chw_ref'] === '49') {
+                $unknownInProvince[] = $r;
+            } else {
+                $unknownOutProvince[] = $r;
+            }
         }
         $rows = $known;
-        if ($unknown) $rows[] = merge_rows_into_bucket($unknown, $numericCols, 'other', 'นอกจังหวัดมุกดาหาร');
+        if ($unknownInProvince) $rows[] = merge_rows_into_bucket($unknownInProvince, $numericCols, 'other_in', 'ในจังหวัดมุกดาหาร (รหัสอำเภอไม่พบ/ผิดปกติ)');
+        if ($unknownOutProvince) $rows[] = merge_rows_into_bucket($unknownOutProvince, $numericCols, 'other', 'นอกจังหวัดมุกดาหาร');
     } elseif ($level === 'chw_addr') {
         usort($rows, fn($a, $b) => $b['d'] <=> $a['d']);
         $keep = array_slice($rows, 0, 8);

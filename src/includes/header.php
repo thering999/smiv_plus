@@ -22,7 +22,11 @@ $adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'setting
   <div class="brand">🧠 SMI-V Plus : ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง</div>
   <nav class="nav">
     <a href="<?= url('/index.php') ?>" class="<?= $current === 'index.php' ? 'active' : '' ?>">Dashboard</a>
+    <a href="<?= url('/dashboard.php') ?>" class="<?= $current === 'dashboard.php' ? 'active' : '' ?>">แดชบอร์ด</a>
     <a href="<?= url('/analysis.php') ?>" class="<?= $current === 'analysis.php' ? 'active' : '' ?>">วิเคราะห์ปัญหา</a>
+    <a href="<?= url('/action_list.php') ?>" class="<?= $current === 'action_list.php' ? 'active' : '' ?>">รายชื่อต้องติดตาม</a>
+    <a href="<?= url('/alert.php') ?>" class="<?= $current === 'alert.php' ? 'active' : '' ?>">การแจ้งเตือน</a>
+    <a href="<?= url('/benchmark.php') ?>" class="<?= $current === 'benchmark.php' ? 'active' : '' ?>">เปรียบเทียบผลงาน</a>
     <a href="<?= url('/reference.php') ?>" class="<?= $current === 'reference.php' ? 'active' : '' ?>">คู่มือรหัส</a>
     <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
       <div class="nav-dropdown">

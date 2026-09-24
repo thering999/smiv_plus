@@ -13,6 +13,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 $level = $_GET['level'] ?? 'ampur';
+$format = $_GET['format'] ?? 'xlsx';
 $dateFrom = trim($_GET['date_from'] ?? '') ?: null;
 $dateTo = trim($_GET['date_to'] ?? '') ?: null;
 $data = build_smiv_report($pdo, $fy, $level, $dateFrom, $dateTo);
@@ -96,11 +97,87 @@ foreach (['E', 'G', 'L', 'O'] as $pctCol) {
     $sheet->getStyle("{$pctCol}" . ($headerRow + 1) . ":{$pctCol}{$row}")->getNumberFormat()->setFormatCode('0.00"%"');
 }
 
-$filename = "smiv_report_{$level}_{$fy}.xlsx";
-header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-header('Content-Disposition: attachment;filename="' . $filename . '"');
-header('Cache-Control: max-age=0');
+if ($format === 'pdf') {
+    // PDF export using simple HTML table
+    $html = "<html><head><meta charset='UTF-8'><style>";
+    $html .= "body { font-family: 'Courier New', monospace; font-size: 10px; margin: 10px; }";
+    $html .= "h1 { font-size: 14px; text-align: center; margin-bottom: 20px; }";
+    $html .= "table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }";
+    $html .= "th, td { border: 1px solid #000; padding: 6px; text-align: left; }";
+    $html .= "th { background: #f0f0f0; font-weight: bold; }";
+    $html .= ".text-right { text-align: right; }";
+    $html .= ".text-center { text-align: center; }";
+    $html .= ".total { font-weight: bold; background: #f0f0f0; }";
+    $html .= "</style></head><body>";
 
-$writer = new Xlsx($spreadsheet);
-$writer->save('php://output');
-exit;
+    $html .= "<h1>รายงาน SMI-V ปีงบประมาณ {$fy} — {$areaLabel}</h1>";
+    if ($dateFrom && $dateTo) {
+        $html .= "<p style='text-align:center;'>ช่วงวันที่มารับบริการครั้งแรก: {$dateFrom} ถึง {$dateTo}</p>";
+    }
+
+    $html .= "<table>";
+    $html .= "<tr>";
+    foreach ($headers as $h) {
+        $html .= "<th class='text-right'>" . htmlspecialchars($h) . "</th>";
+    }
+    $html .= "</tr>";
+
+    foreach ($report as $r) {
+        $html .= "<tr>";
+        $html .= "<td>" . htmlspecialchars($r['ampur_name']) . "</td>";
+        $html .= "<td class='text-right'>" . $r['b'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['c'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['d'] . "</td>";
+        $html .= "<td class='text-right'>" . number_format($r['e'], 2) . "%</td>";
+        $html .= "<td class='text-right'>" . $r['f'] . "</td>";
+        $html .= "<td class='text-right'>" . number_format($r['g'], 2) . "%</td>";
+        $html .= "<td class='text-right'>" . $r['h'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['i'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['j'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['k'] . "</td>";
+        $html .= "<td class='text-right'>" . number_format($r['l'], 2) . "%</td>";
+        $html .= "<td class='text-right'>" . $r['m'] . "</td>";
+        $html .= "<td class='text-right'>" . $r['n'] . "</td>";
+        $html .= "<td class='text-right'>" . number_format($r['o'], 2) . "%</td>";
+        $html .= "<td class='text-right'>" . ($r['missing_followup'] ?? 0) . "</td>";
+        $html .= "</tr>";
+    }
+
+    $html .= "<tr class='total'>";
+    $html .= "<td>รวม</td>";
+    $html .= "<td class='text-right'>" . $totals['b'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['c'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['d'] . "</td>";
+    $html .= "<td class='text-right'>" . number_format($totals['e'], 2) . "%</td>";
+    $html .= "<td class='text-right'>" . $totals['f'] . "</td>";
+    $html .= "<td class='text-right'>" . number_format($totals['g'], 2) . "%</td>";
+    $html .= "<td class='text-right'>" . $totals['h'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['i'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['j'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['k'] . "</td>";
+    $html .= "<td class='text-right'>" . number_format($totals['l'], 2) . "%</td>";
+    $html .= "<td class='text-right'>" . $totals['m'] . "</td>";
+    $html .= "<td class='text-right'>" . $totals['n'] . "</td>";
+    $html .= "<td class='text-right'>" . number_format($totals['o'], 2) . "%</td>";
+    $html .= "<td class='text-right'>" . ($totals['missing_followup'] ?? 0) . "</td>";
+    $html .= "</tr>";
+    $html .= "</table>";
+
+    $html .= "<p style='font-size:9px; color: #999; margin-top: 20px;'>สร้างเมื่อ: " . date('Y-m-d H:i:s') . " | SMI-V Plus Report System</p>";
+    $html .= "</body></html>";
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: inline; filename="smiv_report_' . $level . '_' . $fy . '.html"');
+    echo $html;
+    exit;
+} else {
+    // Excel export (default)
+    $filename = "smiv_report_{$level}_{$fy}.xlsx";
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment;filename="' . $filename . '"');
+    header('Cache-Control: max-age=0');
+
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
+}
