@@ -220,12 +220,16 @@ function buildReport(fy, level, dateFrom, dateTo) {
     rows.push({ group_key: key, label: level === 'hoscode' ? hoscodeLabel : (level === 'chw_addr' ? provinceName(key) : key), ampur_ref: ampurRef, patients: ps });
   }
 
-  // รวมกลุ่มนอกพื้นที่หลักเป็น "อื่นๆ"
+  // รวมกลุ่มนอกพื้นที่หลักเป็น "อื่นๆ" — ต้องเช็ค chw_addr ด้วย ไม่ใช่แค่ ampur เพราะรหัสอำเภอ 2 หลักซ้ำกันได้ข้ามจังหวัด
   if (level === 'ampur') {
-    const known = rows.filter(r => pop[r.ampur_ref]);
-    const unknown = rows.filter(r => !pop[r.ampur_ref]);
+    const known = rows.filter(r => pop[r.ampur_ref] && r.patients.every(p => p.chw_addr === '49'));
+    const notKnown = rows.filter(r => !(pop[r.ampur_ref] && r.patients.every(p => p.chw_addr === '49')));
     rows = known;
-    if (unknown.length) rows.push({ group_key: 'other', label: 'นอกจังหวัดมุกดาหาร', ampur_ref: null, patients: unknown.flatMap(r => r.patients) });
+    const unknownPatients = notKnown.flatMap(r => r.patients);
+    const inProvince = unknownPatients.filter(p => p.chw_addr === '49');
+    const outProvince = unknownPatients.filter(p => p.chw_addr !== '49');
+    if (inProvince.length) rows.push({ group_key: 'other_in', label: 'ในจังหวัดมุกดาหาร (รหัสอำเภอไม่พบ/ผิดปกติ)', ampur_ref: null, patients: inProvince });
+    if (outProvince.length) rows.push({ group_key: 'other', label: 'นอกจังหวัดมุกดาหาร', ampur_ref: null, patients: outProvince });
   } else if (level === 'chw_addr') {
     rows.sort((a, b) => b.patients.length - a.patients.length);
     const keep = rows.slice(0, 8), rest = rows.slice(8);
@@ -439,17 +443,20 @@ function buildViolenceTypeDropoutReportByArea(fy, level, refDate) {
   const groups = new Map();
   for (const p of filtered) {
     // อำเภอที่ไม่รู้จัก (ไม่ใช่ 7 อำเภอหลักของจังหวัด) รวมเป็น "อื่นๆ" แทนที่จะโชว์รหัสดิบ — ตรงกับ buildReport() หลัก
-    const key = level === 'ampur' && !KNOWN_AMPUR[p.ampur] ? 'other' : groupKeyFor(p, level);
+    // ต้องเช็ค chw_addr ด้วย เพราะรหัสอำเภอ 2 หลักซ้ำกันได้ข้ามจังหวัด
+    const isKnownAmpur = KNOWN_AMPUR[p.ampur] && p.chw_addr === '49';
+    const key = level === 'ampur' && !isKnownAmpur ? (p.chw_addr === '49' ? 'other_in' : 'other') : groupKeyFor(p, level);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
   const areas = Array.from(groups.entries()).map(([key, ps]) => {
     let label = key;
-    if (level === 'ampur') label = key === 'other' ? 'นอกจังหวัดมุกดาหาร' : (KNOWN_AMPUR[key] || key);
+    if (level === 'ampur') label = key === 'other' ? 'นอกจังหวัดมุกดาหาร' : (key === 'other_in' ? 'ในจังหวัดมุกดาหาร (รหัสอำเภอไม่พบ/ผิดปกติ)' : (KNOWN_AMPUR[key] || key));
     else if (level === 'hoscode') label = ps.find(p => p.hosname)?.hosname || key;
     return { key, label, rows: countByViolenceType(ps), total: ps.length };
   });
-  areas.sort((a, b) => (a.key === 'other') - (b.key === 'other') || b.total - a.total);
+  const isOtherKey = k => k === 'other' || k === 'other_in';
+  areas.sort((a, b) => isOtherKey(a.key) - isOtherKey(b.key) || b.total - a.total);
   return { fy, level, totalPatients: filtered.length, totalsByType: countByViolenceType(filtered), areas };
 }
 
