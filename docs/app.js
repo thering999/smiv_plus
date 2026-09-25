@@ -242,13 +242,13 @@ function buildReport(fy, level, dateFrom, dateTo, scope = 'all') {
     if (outProvince.length) rows.push({ group_key: 'other', label: 'นอกจังหวัดมุกดาหาร', ampur_ref: null, patients: outProvince });
   } else if (level === 'chw_addr') {
     rows.sort((a, b) => b.patients.length - a.patients.length);
-    const keep = rows.slice(0, 8), rest = rows.slice(8);
+    const keep = rows.slice(0, 15), rest = rows.slice(15);
     rows = keep;
     if (rest.length) rows.push({ group_key: 'other', label: 'อื่นๆ (จังหวัดอื่น)', ampur_ref: null, patients: rest.flatMap(r => r.patients) });
   }
 
   const report = [];
-  const totals = { b:0,c:0,d:0,f:0,j:0,k:0,m:0,n:0,h:0,i:0, zero_followup:0, repeat_violence_count:0, missing_birth:0, missing_tambon:0, missing_followup:0, same_day_followup:0 };
+  const totals = { b:0,c:0,d:0,f:0,j:0,k:0,m:0,n:0,h:0,i:0, zero_followup:0, repeat_violence_count:0, missing_birth:0, missing_tambon:0, missing_followup:0, same_day_followup:0, d_pop:0, k_pop:0, n_pop:0 };
   let hasPopulationData = false;
 
   for (const r of rows) {
@@ -296,13 +296,15 @@ function buildReport(fy, level, dateFrom, dateTo, scope = 'all') {
 
     for (const key of ['b','c','d','f','j','k','m','n','zero_followup','repeat_violence_count','missing_birth','missing_tambon','missing_followup','same_day_followup']) totals[key] += line[key];
     totals.h += h; totals.i += i;
+    // E/L/O ของแถวรวมคิดเฉพาะพื้นที่ที่มีประชากร (H) — ผู้ป่วยนอกจังหวัดไม่มีตัวหาร ถ้านับรวมจะทำให้ E เกินจริง
+    if (h > 0) { totals.d_pop += line.d; totals.k_pop += k; totals.n_pop += n; }
   }
   // กลุ่ม "ในจังหวัด (รหัสไม่พบ)" / "นอกจังหวัด" / "อื่นๆ" อยู่ท้ายตารางเสมอ
   const tailRank = k => ({ other_in: 1, other: 2 }[k] || 0);
   report.sort((a, b) => tailRank(a.group_key) - tailRank(b.group_key) || b.d - a.d);
-  totals.e = pct(totals.d, totals.i);
-  totals.l = pct(totals.k, totals.i);
-  totals.o = pct(totals.n, totals.i);
+  totals.e = pct(totals.d_pop, totals.i);
+  totals.l = pct(totals.k_pop, totals.i);
+  totals.o = pct(totals.n_pop, totals.i);
   totals.g = totals.o;
 
   return { report, totals, level, hasPopulationData };

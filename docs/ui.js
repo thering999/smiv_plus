@@ -581,8 +581,20 @@ let mainTableSearch = '';
 function sumReportRows(rows, label) {
   const s = { ampur_name: label, subtotal: true };
   for (const k of ['b','c','d','f','h','i','j','k','m','n','missing_followup']) s[k] = rows.reduce((a, r) => a + r[k], 0);
-  s.e = pct(s.d, s.i); s.l = pct(s.k, s.i); s.o = pct(s.n, s.i); s.g = s.o;
+  // เหมือนแถวรวมใน buildReport: E/L/O นับเฉพาะแถวที่มีประชากร (H>0)
+  const withPop = rows.filter(r => r.h > 0);
+  const sumPop = k => withPop.reduce((a, r) => a + r[k], 0);
+  s.e = pct(sumPop('d'), s.i); s.l = pct(sumPop('k'), s.i); s.o = pct(sumPop('n'), s.i); s.g = s.o;
   return s;
+}
+
+// รายอำเภอ + ดูทั้งหมด: แทรกแถว "รวมในจังหวัด" ก่อนแถวนอกจังหวัด ให้เห็นยอดแยก ใน/นอก ครบ (ตาราง + Excel)
+function withProvinceSubtotal(report, level) {
+  if (level !== 'ampur' || currentScope() !== 'all') return report;
+  const inRows = report.filter(r => r.group_key !== 'other');
+  const outRows = report.filter(r => r.group_key === 'other');
+  if (!inRows.length || !outRows.length) return report;
+  return [...inRows, sumReportRows(inRows, 'รวมในจังหวัดมุกดาหาร'), ...outRows];
 }
 
 function renderTable(report, totals, level) {
@@ -602,12 +614,7 @@ function renderTable(report, totals, level) {
   }
   report = rows;
 
-  // รายอำเภอ + ดูทั้งหมด: แทรกแถว "รวมในจังหวัด" ก่อนแถวนอกจังหวัด ให้เห็นยอดแยก ใน/นอก ครบในตารางเดียว
-  if (level === 'ampur' && currentScope() === 'all' && !mainTableSearch.trim() && !mainTableSortKey) {
-    const inRows = report.filter(r => r.group_key !== 'other');
-    const outRows = report.filter(r => r.group_key === 'other');
-    if (inRows.length && outRows.length) report = [...inRows, sumReportRows(inRows, 'รวมในจังหวัดมุกดาหาร'), ...outRows];
-  }
+  if (!mainTableSearch.trim() && !mainTableSortKey) report = withProvinceSubtotal(report, level);
 
   tbody.innerHTML = report.map(r => `
     <tr${r.subtotal ? ' class="subtotal-row"' : ''}>
@@ -1141,7 +1148,7 @@ function exportReportXlsx(levelOverride) {
   const areaLabel = REPORT_LEVELS[level] + (scope !== 'all' ? ` (${SCOPE_LABELS[scope]})` : '');
   const header = [`รายงาน SMI-V ปีงบประมาณ ${fy} — ${areaLabel}`];
   const cols = ['พื้นที่','เก่า (B)','ใหม่ (C)','รวม (D)','อัตราเข้าถึงบริการ E (%)','ไม่ก่อซ้ำสะสม (F)','ร้อยละต่อเนื่องไม่ก่อซ้ำ G (%)','ประชากร H','ประมาณการณ์ I','ติดตาม1ครั้ง J','J ไม่ก่อซ้ำ K','L=K/I*100','ติดตาม≥2ครั้ง M','M ไม่ก่อซ้ำ N','O=N/I*100','ขาดการติดตาม'];
-  const rows = report.map(r => [r.ampur_name, r.b, r.c, r.d, r.e, r.f, r.g, r.h, r.i, r.j, r.k, r.l, r.m, r.n, r.o, r.missing_followup]);
+  const rows = withProvinceSubtotal(report, level).map(r => [r.ampur_name, r.b, r.c, r.d, r.e, r.f, r.g, r.h, r.i, r.j, r.k, r.l, r.m, r.n, r.o, r.missing_followup]);
   rows.push(['รวม', totals.b, totals.c, totals.d, totals.e, totals.f, totals.g, totals.h, totals.i, totals.j, totals.k, totals.l, totals.m, totals.n, totals.o, totals.missing_followup]);
 
   const ws = XLSX.utils.aoa_to_sheet([header, [], cols, ...rows]);
