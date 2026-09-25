@@ -21,14 +21,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $displayName = trim($_POST['display_name'] ?? '');
         $password = $_POST['password'] ?? '';
         $role = in_array($_POST['role'] ?? '', ['admin', 'viewer'], true) ? $_POST['role'] : 'viewer';
+        $ampur = trim($_POST['ampur'] ?? '');
+        $ampur = $ampur === '' ? null : $ampur;
 
         if ($username === '' || $displayName === '' || strlen($password) < 8) {
             $_SESSION['users_flash_error'] = 'กรอกข้อมูลให้ครบ และรหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร';
         } else {
             try {
-                $pdo->prepare('INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)')
-                    ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $displayName, $role]);
-                log_audit($pdo, $actorId, 'user_create', "username={$username}, role={$role}");
+                $pdo->prepare('INSERT INTO users (username, password_hash, display_name, role, ampur) VALUES (?,?,?,?,?)')
+                    ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $displayName, $role, $ampur]);
+                log_audit($pdo, $actorId, 'user_create', "username={$username}, role={$role}, ampur=" . ($ampur ?? 'ทุกอำเภอ'));
                 $_SESSION['users_flash_message'] = 'สร้างผู้ใช้แล้ว';
             } catch (PDOException $e) {
                 $_SESSION['users_flash_error'] = 'ชื่อผู้ใช้นี้มีอยู่แล้ว';
@@ -39,6 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $displayName = trim($_POST['display_name'] ?? '');
         $role = in_array($_POST['role'] ?? '', ['admin', 'viewer'], true) ? $_POST['role'] : 'viewer';
         $newPassword = $_POST['new_password'] ?? '';
+        $ampur = trim($_POST['ampur'] ?? '');
+        $ampur = $ampur === '' ? null : $ampur;
 
         if ($id === $actorId && $role !== 'admin') {
             $_SESSION['users_flash_error'] = 'ลดสิทธิ์บัญชีตัวเองไม่ได้';
@@ -48,13 +52,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['users_flash_error'] = 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร';
         } else {
             if ($newPassword !== '') {
-                $pdo->prepare('UPDATE users SET display_name = ?, role = ?, password_hash = ? WHERE id = ?')
-                    ->execute([$displayName, $role, password_hash($newPassword, PASSWORD_DEFAULT), $id]);
-                log_audit($pdo, $actorId, 'user_update', "id={$id}, role={$role}, password_reset=1");
+                $pdo->prepare('UPDATE users SET display_name = ?, role = ?, ampur = ?, password_hash = ? WHERE id = ?')
+                    ->execute([$displayName, $role, $ampur, password_hash($newPassword, PASSWORD_DEFAULT), $id]);
+                log_audit($pdo, $actorId, 'user_update', "id={$id}, role={$role}, ampur=" . ($ampur ?? 'ทุกอำเภอ') . ", password_reset=1");
             } else {
-                $pdo->prepare('UPDATE users SET display_name = ?, role = ? WHERE id = ?')
-                    ->execute([$displayName, $role, $id]);
-                log_audit($pdo, $actorId, 'user_update', "id={$id}, role={$role}");
+                $pdo->prepare('UPDATE users SET display_name = ?, role = ?, ampur = ? WHERE id = ?')
+                    ->execute([$displayName, $role, $ampur, $id]);
+                log_audit($pdo, $actorId, 'user_update', "id={$id}, role={$role}, ampur=" . ($ampur ?? 'ทุกอำเภอ'));
+            }
+            if ($id === $actorId) {
+                $_SESSION['ampur'] = $role === 'admin' ? null : $ampur;
             }
             $_SESSION['users_flash_message'] = 'แก้ไขผู้ใช้แล้ว';
         }
@@ -80,7 +87,9 @@ $message = $_SESSION['users_flash_message'] ?? '';
 $error = $_SESSION['users_flash_error'] ?? '';
 unset($_SESSION['users_flash_message'], $_SESSION['users_flash_error']);
 
-$users = $pdo->query('SELECT id, username, display_name, role, locked_until, created_at FROM users ORDER BY id')->fetchAll();
+$users = $pdo->query('SELECT id, username, display_name, role, ampur, locked_until, created_at FROM users ORDER BY id')->fetchAll();
+// รายชื่ออำเภอมุกดาหารสำหรับ dropdown (มาจากข้อมูลประชากรที่กรอกไว้ — คือแหล่งเดียวที่มีรายชื่ออำเภอ+ชื่อในระบบ)
+$ampurOptions = $pdo->query('SELECT DISTINCT ampur, ampur_name FROM population_estimates ORDER BY ampur')->fetchAll();
 
 $pageTitle = 'ผู้ใช้งาน - SMI-V Plus';
 require __DIR__ . '/includes/header.php';
@@ -103,11 +112,18 @@ require __DIR__ . '/includes/header.php';
     <option value="viewer">viewer (ดูรายงานอย่างเดียว)</option>
     <option value="admin">admin</option>
   </select>
+  <label>อำเภอที่จำกัดสิทธิ์ (viewer เท่านั้น)</label>
+  <select name="ampur">
+    <option value="">ทุกอำเภอ</option>
+    <?php foreach ($ampurOptions as $a): ?>
+      <option value="<?= htmlspecialchars($a['ampur']) ?>"><?= htmlspecialchars($a['ampur_name']) ?></option>
+    <?php endforeach; ?>
+  </select>
   <button type="submit">สร้างผู้ใช้</button>
 </form>
 
 <table class="report-table">
-  <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง / สิทธิ์ / รหัสผ่านใหม่</th><th>สร้างเมื่อ</th><th></th></tr></thead>
+  <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง / สิทธิ์ / อำเภอ / รหัสผ่านใหม่</th><th>สร้างเมื่อ</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($users as $u): ?>
     <tr>
@@ -121,6 +137,12 @@ require __DIR__ . '/includes/header.php';
           <select name="role">
             <option value="viewer" <?= $u['role'] === 'viewer' ? 'selected' : '' ?>>viewer</option>
             <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>admin</option>
+          </select>
+          <select name="ampur">
+            <option value="" <?= $u['ampur'] === null ? 'selected' : '' ?>>ทุกอำเภอ</option>
+            <?php foreach ($ampurOptions as $a): ?>
+              <option value="<?= htmlspecialchars($a['ampur']) ?>" <?= $u['ampur'] === $a['ampur'] ? 'selected' : '' ?>><?= htmlspecialchars($a['ampur_name']) ?></option>
+            <?php endforeach; ?>
           </select>
           <input type="password" name="new_password" placeholder="รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)" minlength="8">
           <button type="submit">บันทึก</button>

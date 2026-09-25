@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(100) NOT NULL,
     role VARCHAR(10) NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+    ampur VARCHAR(10) NULL, -- จำกัดสิทธิ์ผู้ใช้ให้เห็นเฉพาะอำเภอนี้ (จับคู่กับ chw_addr='49' เสมอ); NULL = ไม่จำกัด (admin ไม่ถูกจำกัดเสมอ ไม่ว่าค่านี้จะเป็นอะไร)
     failed_attempts INT NOT NULL DEFAULT 0,
     locked_until TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

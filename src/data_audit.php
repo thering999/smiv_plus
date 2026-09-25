@@ -8,15 +8,16 @@ require __DIR__ . '/includes/report_data.php';
 
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 
+[$scopeSql, $scopeParams] = scope_sql('p', 'positional');
 $stmt = $pdo->prepare(
     "SELECT id, hoscode, hosname, pid, name, lname, birth, ampur,
             first_date_serv, follow_last, total_visits
      FROM patients p
      LEFT JOIN (SELECT patient_id, COUNT(*) total_visits FROM patient_visits GROUP BY patient_id) v ON v.patient_id = p.id
-     WHERE p.fiscal_year_be = ?
+     WHERE p.fiscal_year_be = ? $scopeSql
      ORDER BY p.hoscode, p.pid"
 );
-$stmt->execute([$fy]);
+$stmt->execute(array_merge([$fy], $scopeParams));
 $allPatients = $stmt->fetchAll();
 
 $issues = [];

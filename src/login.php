@@ -36,6 +36,8 @@ if ($ipAttempts >= IP_MAX_ATTEMPTS) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['display_name'] = $user['display_name'];
         $_SESSION['role'] = $user['role'];
+        // admin ไม่ถูกจำกัดพื้นที่เสมอ แม้จะมีค่า ampur ตั้งไว้ก็ตาม
+        $_SESSION['ampur'] = $user['role'] === 'admin' ? null : ($user['ampur'] ?? null);
         header('Location: ' . url('/index.php'));
         exit;
     } else {
