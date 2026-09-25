@@ -23,6 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = in_array($_POST['role'] ?? '', ['admin', 'viewer'], true) ? $_POST['role'] : 'viewer';
         $ampur = trim($_POST['ampur'] ?? '');
         $ampur = $ampur === '' ? null : $ampur;
+        if ($ampur !== null) {
+            $chk = $pdo->prepare('SELECT 1 FROM population_estimates WHERE ampur = ? LIMIT 1');
+            $chk->execute([$ampur]);
+            if (!$chk->fetch()) $ampur = null;
+        }
 
         if ($username === '' || $displayName === '' || strlen($password) < 8) {
             $_SESSION['users_flash_error'] = 'กรอกข้อมูลให้ครบ และรหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร';
@@ -43,6 +48,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newPassword = $_POST['new_password'] ?? '';
         $ampur = trim($_POST['ampur'] ?? '');
         $ampur = $ampur === '' ? null : $ampur;
+        if ($ampur !== null) {
+            $chk = $pdo->prepare('SELECT 1 FROM population_estimates WHERE ampur = ? LIMIT 1');
+            $chk->execute([$ampur]);
+            if (!$chk->fetch()) $ampur = null;
+        }
 
         if ($id === $actorId && $role !== 'admin') {
             $_SESSION['users_flash_error'] = 'ลดสิทธิ์บัญชีตัวเองไม่ได้';
