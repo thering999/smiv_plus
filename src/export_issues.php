@@ -14,8 +14,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 $level = $_GET['level'] ?? 'ampur';
 $areaFilter = trim($_GET['area'] ?? '');
-$dateFrom = trim($_GET['date_from'] ?? '') ?: null;
-$dateTo = trim($_GET['date_to'] ?? '') ?: null;
+[$dateFrom, $dateTo, $q] = resolve_date_filter($fy);
 
 $data = build_smiv_report($pdo, $fy, $level);
 $level = $data['level'];
