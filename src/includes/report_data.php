@@ -14,6 +14,26 @@ function merge_rows_into_bucket(array $rows, array $numericCols, string $groupKe
     return $bucket;
 }
 
+// รหัสอำเภอที่ผู้ใช้ (viewer) ถูกจำกัดสิทธิ์ให้เห็น (null = ไม่จำกัด/admin) — เซ็ตที่ login.php
+function get_scope_ampur(): ?string
+{
+    return $_SESSION['ampur'] ?? null;
+}
+
+// คืน [SQL fragment (เริ่มด้วย ' AND '), params] สำหรับจำกัดให้เห็นเฉพาะอำเภอของผู้ใช้
+// ต้องเทียบคู่กับ chw_addr = '49' (จังหวัดมุกดาหาร) เสมอ เพราะรหัสอำเภอ 2 หลักซ้ำกันได้ข้ามจังหวัด (ดู build_smiv_report)
+// $style: 'named' ใช้ :placeholder (default, เข้ากับ query ที่ใช้ named params) หรือ 'positional' ใช้ ?
+function scope_sql(string $alias = 'p', string $style = 'named', string $name = 'scope_ampur'): array
+{
+    $ampur = get_scope_ampur();
+    if ($ampur === null || $ampur === '') return ['', []];
+    $prefix = $alias !== '' ? "$alias." : '';
+    if ($style === 'positional') {
+        return [" AND {$prefix}ampur = ? AND {$prefix}chw_addr = '49'", [$ampur]];
+    }
+    return [" AND {$prefix}ampur = :$name AND {$prefix}chw_addr = '49'", [$name => $ampur]];
+}
+
 const TARGET_ACCESS_RATE = 40.0;        // เป้า HDC 2569: อัตราเข้าถึงบริการ >40%
 const THRESHOLD_REPEAT_VIOLENCE = 15.0; // อัตราก่อความรุนแรงซ้ำสูงกว่านี้ถือว่าเป็นปัญหา
 const THRESHOLD_ZERO_FOLLOWUP = 30.0;   // สัดส่วนไม่เคยติดตามซ้ำสูงกว่านี้ถือว่าเป็นปัญหา
@@ -164,6 +184,8 @@ function get_problem_patients(PDO $pdo, int $fy, string $level = 'ampur', string
         $areaSql = " AND $col = :area_filter";
         $params['area_filter'] = $areaFilter;
     }
+    [$scopeSql, $scopeParams] = scope_sql('p', 'named');
+    $params += $scopeParams;
 
     $stmt = $pdo->prepare(
         "SELECT p.hoscode, p.hosname, p.pid, p.cid, p.name, p.lname, p.birth, p.sex, p.chw_addr, p.tambon, p.ampur,
@@ -174,7 +196,7 @@ function get_problem_patients(PDO $pdo, int $fy, string $level = 'ampur', string
          JOIN (SELECT patient_id, COUNT(*) total_visits FROM patient_visits GROUP BY patient_id) v ON v.patient_id = p.id
          WHERE p.fiscal_year_be <= :fy
            AND (p.age_at_fy_end IS NULL OR p.age_at_fy_end <= :max_age)
-           $dateSql $areaSql
+           $dateSql $areaSql $scopeSql
          ORDER BY p.hoscode, p.pid"
     );
     $stmt->execute($params);
@@ -249,8 +271,9 @@ function ai_summarize(array $totals, string $areaLabel, int $fy, bool $hasPop): 
 // ข้อมูลเสริมสำหรับกราฟ: สัดส่วนเพศ + แนวโน้มผู้ป่วยใหม่รายเดือน (12 เดือนล่าสุดของปีงบ)
 function build_extra_charts(PDO $pdo, int $fy): array
 {
-    $sexStmt = $pdo->prepare('SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? GROUP BY sex');
-    $sexStmt->execute([$fy]);
+    [$scopeSqlPos, $scopeParamsPos] = scope_sql('', 'positional');
+    $sexStmt = $pdo->prepare("SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? $scopeSqlPos GROUP BY sex");
+    $sexStmt->execute(array_merge([$fy], $scopeParamsPos));
     $sex = ['ชาย' => 0, 'หญิง' => 0, 'ไม่ระบุ' => 0];
     foreach ($sexStmt as $r) {
         if ((int) $r['sex'] === 1) $sex['ชาย'] += (int) $r['c'];
@@ -261,13 +284,14 @@ function build_extra_charts(PDO $pdo, int $fy): array
     $ceYearEnd = $fy - 543;
     $rangeStart = date('Y-m-01', strtotime(($ceYearEnd - 1) . '-10-01'));
     $rangeEnd = date('Y-m-t', strtotime($ceYearEnd . '-09-30'));
+    [$scopeSqlNamed, $scopeParamsNamed] = scope_sql('', 'named');
     $trendStmt = $pdo->prepare(
         "SELECT TO_CHAR(first_date_serv, 'YYYY-MM') AS ym, COUNT(*) c
          FROM patients
-         WHERE first_date_serv BETWEEN :start AND :end
+         WHERE first_date_serv BETWEEN :start AND :end $scopeSqlNamed
          GROUP BY ym ORDER BY ym"
     );
-    $trendStmt->execute(['start' => $rangeStart, 'end' => $rangeEnd]);
+    $trendStmt->execute(['start' => $rangeStart, 'end' => $rangeEnd] + $scopeParamsNamed);
     $trend = [];
     foreach ($trendStmt as $r) $trend[$r['ym']] = (int) $r['c'];
 
@@ -281,13 +305,14 @@ function build_monthly_trend(PDO $pdo, int $fy): array
     $rangeStart = date('Y-m-01', strtotime(($ceYearEnd - 1) . '-10-01'));
     $rangeEnd = date('Y-m-t', strtotime($ceYearEnd . '-09-30'));
 
+    [$scopeSql, $scopeParams] = scope_sql('', 'positional');
     $stmt = $pdo->prepare(
         "SELECT TO_CHAR(first_date_serv, 'YYYY-MM') AS ym, COUNT(*) c
          FROM patients
-         WHERE fiscal_year_be = ? AND first_date_serv BETWEEN ? AND ?
+         WHERE fiscal_year_be = ? AND first_date_serv BETWEEN ? AND ? $scopeSql
          GROUP BY ym ORDER BY ym"
     );
-    $stmt->execute([$fy, $rangeStart, $rangeEnd]);
+    $stmt->execute(array_merge([$fy, $rangeStart, $rangeEnd], $scopeParams));
     $trend = [];
     foreach ($stmt as $r) $trend[$r['ym']] = (int) $r['c'];
     return $trend;
@@ -296,19 +321,22 @@ function build_monthly_trend(PDO $pdo, int $fy): array
 // แนวโน้มอัตราเข้าถึงบริการข้ามปีงบ
 function build_access_rate_trend(PDO $pdo): array
 {
-    $fyStmt = $pdo->prepare('SELECT DISTINCT fiscal_year_be FROM patients ORDER BY fiscal_year_be');
-    $fyStmt->execute();
+    [$scopeSql, $scopeParams] = scope_sql('', 'positional');
+    $fyStmt = $pdo->prepare("SELECT DISTINCT fiscal_year_be FROM patients WHERE 1=1 $scopeSql ORDER BY fiscal_year_be");
+    $fyStmt->execute($scopeParams);
     $years = [];
     $rates = [];
     foreach ($fyStmt as $r) {
         $fy = (int) $r['fiscal_year_be'];
-        $popStmt = $pdo->prepare('SELECT SUM(population_15_60) total FROM population_estimates WHERE fiscal_year_be = ?');
-        $popStmt->execute([$fy]);
+        // ประชากร (ตัวหาร) ต้องจำกัดอำเภอเดียวกับจำนวนผู้ป่วย (ตัวตั้ง) ไม่งั้นอัตราของผู้ใช้ระดับอำเภอจะต่ำผิดจริง
+        $scopeAmpur = get_scope_ampur();
+        $popStmt = $pdo->prepare('SELECT SUM(population_15_60) total FROM population_estimates WHERE fiscal_year_be = ?' . ($scopeAmpur ? ' AND ampur = ?' : ''));
+        $popStmt->execute($scopeAmpur ? [$fy, $scopeAmpur] : [$fy]);
         $totalPop = (int) ($popStmt->fetchColumn() ?? 0);
         if ($totalPop === 0) continue;
 
-        $patStmt = $pdo->prepare('SELECT COUNT(*) FROM patients WHERE fiscal_year_be <= ? AND age_at_fy_end <= ?');
-        $patStmt->execute([$fy, max_age_included($pdo)]);
+        $patStmt = $pdo->prepare("SELECT COUNT(*) FROM patients WHERE fiscal_year_be <= ? AND age_at_fy_end <= ? $scopeSql");
+        $patStmt->execute(array_merge([$fy, max_age_included($pdo)], $scopeParams));
         $totalPat = (int) ($patStmt->fetchColumn() ?? 0);
 
         $estimated = estimate_smiv_patients($pdo, $totalPop);
@@ -323,8 +351,9 @@ function build_access_rate_trend(PDO $pdo): array
 // สัดส่วนเพศ
 function build_sex_distribution(PDO $pdo, int $fy): array
 {
-    $stmt = $pdo->prepare('SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? GROUP BY sex');
-    $stmt->execute([$fy]);
+    [$scopeSql, $scopeParams] = scope_sql('', 'positional');
+    $stmt = $pdo->prepare("SELECT sex, COUNT(*) c FROM patients WHERE fiscal_year_be <= ? $scopeSql GROUP BY sex");
+    $stmt->execute(array_merge([$fy], $scopeParams));
     $result = ['ชาย' => 0, 'หญิง' => 0, 'ไม่ระบุ' => 0];
     foreach ($stmt as $r) {
         if ((int) $r['sex'] === 1) $result['ชาย'] += (int) $r['c'];
@@ -413,6 +442,8 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
         $params['date_from'] = $dateFrom;
         $params['date_to'] = $dateTo;
     }
+    [$scopeSql, $scopeParams] = scope_sql('p', 'named');
+    $params += $scopeParams;
 
     $stmt = $pdo->prepare(
         "SELECT $groupCol AS group_key, $labelCol AS label, $ampurRefCol AS ampur_ref, $chwRefCol AS chw_ref,
@@ -437,7 +468,7 @@ function build_smiv_report(PDO $pdo, int $fy, string $level = 'ampur', ?string $
          ) v ON v.patient_id = p.id
          WHERE p.fiscal_year_be <= :fy3
            AND (p.age_at_fy_end IS NULL OR p.age_at_fy_end <= :max_age)
-           $dateFilterSql
+           $dateFilterSql $scopeSql
          GROUP BY $groupByCol
          ORDER BY d DESC"
     );

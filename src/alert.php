@@ -115,14 +115,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch active alerts
+// Fetch active alerts (จำกัดเฉพาะอำเภอของผู้ใช้ถ้าถูกจำกัดสิทธิ์ — ป้องกัน alert เก่าก่อนเปิดใช้ ampur scope หลุดมาแสดง)
+$scopeAmpur = get_scope_ampur();
+$alertParams = [$fy];
+$alertScopeSql = '';
+if ($scopeAmpur !== null) {
+    $alertScopeSql = ' AND ampur = ?';
+    $alertParams[] = $scopeAmpur;
+}
 $alertStmt = $pdo->prepare(
     "SELECT id, ampur, alert_type, message, severity, metric_value, threshold, created_at
      FROM alerts
-     WHERE fiscal_year_be = ? AND dismissed_at IS NULL
+     WHERE fiscal_year_be = ? AND dismissed_at IS NULL $alertScopeSql
      ORDER BY CASE severity WHEN 'danger' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END, created_at DESC"
 );
-$alertStmt->execute([$fy]);
+$alertStmt->execute($alertParams);
 $alerts = $alertStmt->fetchAll();
 
 $pageTitle = 'การแจ้งเตือน - SMI-V Plus';

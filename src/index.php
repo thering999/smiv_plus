@@ -56,6 +56,13 @@ $areaLabel = REPORT_LEVELS[$level];
 $areaQs = $areaFilter !== '' ? '&area=' . urlencode($areaFilter) : '';
 $dateQs = ($q ? '&q=' . $q : '') . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '');
 
+$scopeAmpurNote = null;
+if (get_scope_ampur() !== null) {
+    $scopeRow = $pdo->prepare('SELECT ampur_name FROM population_estimates WHERE ampur = ? LIMIT 1');
+    $scopeRow->execute([get_scope_ampur()]);
+    $scopeAmpurNote = $scopeRow->fetchColumn() ?: get_scope_ampur();
+}
+
 $extra = build_extra_charts($pdo, $fy);
 $lastImport = $pdo->query('SELECT filename, imported_at, row_count FROM import_batches ORDER BY id DESC LIMIT 1')->fetch();
 
@@ -72,6 +79,9 @@ $pageTitle = 'Dashboard SMI-V - SMI-V Plus';
 require __DIR__ . '/includes/header.php';
 ?>
 <h1>ร้อยละผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) เข้าถึงบริการต่อเนื่องและไม่ก่อความรุนแรงซ้ำ</h1>
+<?php if ($scopeAmpurNote): ?>
+  <p class="note">🔒 บัญชีนี้ถูกจำกัดให้เห็นข้อมูลเฉพาะอำเภอ<?= htmlspecialchars($scopeAmpurNote) ?></p>
+<?php endif; ?>
 <?php if ($lastImport): ?>
   <p class="note">ข้อมูลล่าสุด: นำเข้าเมื่อ <?= htmlspecialchars($lastImport['imported_at']) ?> จากไฟล์ <?= htmlspecialchars($lastImport['filename']) ?> (<?= number_format($lastImport['row_count']) ?> แถว)</p>
 <?php else: ?>

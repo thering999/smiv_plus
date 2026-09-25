@@ -28,12 +28,13 @@ function linearRegression($data) {
 }
 
 // Fetch historical data
+[$scopeSql, $scopeParams] = scope_sql('p', 'positional');
 $stmt = $pdo->prepare(
     "SELECT fiscal_year_be,
             SUM(CASE WHEN d > 0 THEN d ELSE 0 END) total_patients,
             SUM(population_15_60) total_pop
      FROM (
-        SELECT p.fiscal_year_be, COUNT(*) d FROM patients p GROUP BY p.fiscal_year_be
+        SELECT p.fiscal_year_be, COUNT(*) d FROM patients p WHERE 1=1 $scopeSql GROUP BY p.fiscal_year_be
      ) patients
      FULL OUTER JOIN (
         SELECT fiscal_year_be, SUM(population_15_60) population_15_60 FROM population_estimates GROUP BY fiscal_year_be
@@ -42,7 +43,7 @@ $stmt = $pdo->prepare(
      GROUP BY fiscal_year_be
      ORDER BY fiscal_year_be"
 );
-$stmt->execute();
+$stmt->execute($scopeParams);
 $historical = $stmt->fetchAll();
 
 // Prepare data for regression

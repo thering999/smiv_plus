@@ -66,13 +66,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $filter = $_GET['status'] ?? 'ongoing';
+// require_admin() ด้านบนแปลว่าปกติเข้าถึงได้เฉพาะ admin (ampur scope = null) แต่กรองซ้ำไว้เผื่ออนาคตเปิดสิทธิ์ให้ viewer
+$scopeAmpur = $_SESSION['ampur'] ?? null;
+$interventionScopeSql = $scopeAmpur !== null ? ' AND ampur = ?' : '';
 $stmt = $pdo->prepare(
     "SELECT id, ampur, problem_type, action_taken, responsible_person, target_date, completion_date, status, created_at
      FROM interventions
-     WHERE status = ? OR ? = 'all'
+     WHERE (status = ? OR ? = 'all') $interventionScopeSql
      ORDER BY target_date ASC NULLS LAST, created_at DESC"
 );
-$stmt->execute([$filter, $filter]);
+$stmt->execute($scopeAmpur !== null ? [$filter, $filter, $scopeAmpur] : [$filter, $filter]);
 $interventions = $stmt->fetchAll();
 
 $pageTitle = 'ติดตามการแทรกแซง - SMI-V Plus';
