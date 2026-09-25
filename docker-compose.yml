@@ -39,6 +39,31 @@ services:
     volumes:
       - ./src:/var/www/html
 
+  db_backup:
+    image: postgres:16
+    container_name: smiv_db_backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGDATABASE: smiv_plus
+      PGUSER: ${MYSQL_USER}
+      PGPASSWORD: ${MYSQL_PASSWORD}
+      BACKUP_KEEP_DAYS: 14
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/smiv_plus_$$(date +%Y%m%d_%H%M%S).sql.gz
+          if pg_dump --no-owner | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "backup ok: $$f"; else rm -f "$$f.tmp"; echo "backup FAILED" >&2; fi
+          find /backups -name 'smiv_plus_*.sql.gz' -mtime +$$BACKUP_KEEP_DAYS -delete
+          sleep 86400
+        done
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: smiv_cloudflared
