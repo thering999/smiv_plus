@@ -356,6 +356,33 @@ function send_alert_email(array $alert, string $appName = 'SMI-V Plus'): bool
     return $sent;
 }
 
+// ส่ง LINE alert ผ่าน Messaging API push (LINE Notify ปิดบริการแล้ว) — fail-soft เหมือน email
+// ต้องตั้ง env LINE_CHANNEL_TOKEN (channel access token) และ LINE_TO (userId/groupId ที่ bot อยู่)
+function send_alert_line(array $alert, string $appName = 'SMI-V Plus'): bool
+{
+    $token = getenv('LINE_CHANNEL_TOKEN') ?: '';
+    $to = getenv('LINE_TO') ?: '';
+    if (!$token || !$to) return false;
+
+    $text = "[{$appName}] แจ้งเตือน: {$alert['alert_type']}\n"
+        . "พื้นที่: {$alert['ampur']}\n"
+        . "{$alert['message']}\n"
+        . "เกณฑ์: {$alert['threshold']} | ค่าปัจจุบัน: {$alert['metric_value']}";
+    $payload = json_encode(['to' => $to, 'messages' => [['type' => 'text', 'text' => mb_substr($text, 0, 5000)]]], JSON_UNESCAPED_UNICODE);
+
+    $ctx = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/json\r\nAuthorization: Bearer {$token}\r\n",
+        'content' => $payload,
+        'timeout' => 5,
+        'ignore_errors' => true,
+    ]]);
+    $res = @file_get_contents('https://api.line.me/v2/bot/message/push', false, $ctx);
+    $ok = $res !== false && isset($http_response_header[0]) && strpos($http_response_header[0], ' 200') !== false;
+    if (!$ok) error_log("LINE alert failed: {$alert['ampur']} | {$alert['alert_type']} | " . ($http_response_header[0] ?? 'no response'));
+    return $ok;
+}
+
 const REPORT_LEVELS = [
     'ampur' => 'รายอำเภอ',
     'hoscode' => 'รายหน่วยบริการ',

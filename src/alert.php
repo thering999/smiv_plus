@@ -99,6 +99,7 @@ foreach ($newAlerts as $alert) {
             $fy, $alert['metric_value'], $alert['threshold']
         ]);
         send_alert_email($alert);
+        send_alert_line($alert);
     }
 }
 

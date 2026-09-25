@@ -34,6 +34,9 @@ services:
       DB_USER: ${MYSQL_USER}
       DB_PASS: ${MYSQL_PASSWORD}
       APP_BASE_PATH: /smiv_plus
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
+      LINE_CHANNEL_TOKEN: ${LINE_CHANNEL_TOKEN:-}
+      LINE_TO: ${LINE_TO:-}
     ports:
       - "8081:80"
     volumes:
