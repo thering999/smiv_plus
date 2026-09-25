@@ -108,8 +108,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'dismiss') {
         $alertId = (int) ($_POST['alert_id'] ?? 0);
-        $pdo->prepare('UPDATE alerts SET dismissed_at = NOW(), dismissed_by = ? WHERE id = ?')
-            ->execute([$_SESSION['user_id'], $alertId]);
+        // ผู้ใช้ระดับอำเภอ dismiss ได้เฉพาะ alert ของอำเภอตัวเอง (กัน IDOR ผ่าน alert_id)
+        $dismissAmpur = get_scope_ampur();
+        $pdo->prepare('UPDATE alerts SET dismissed_at = NOW(), dismissed_by = ? WHERE id = ?' . ($dismissAmpur !== null ? ' AND ampur = ?' : ''))
+            ->execute($dismissAmpur !== null ? [$_SESSION['user_id'], $alertId, $dismissAmpur] : [$_SESSION['user_id'], $alertId]);
         header('Location: ' . url('/alert.php') . '?fy=' . $fy);
         exit;
     }
