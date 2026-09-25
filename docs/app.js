@@ -4,6 +4,7 @@
 
 const EXPECTED_HEADERS = ['hoscode','hosname','pid','cid','name','lname','birth','sex','chw_addr','tambon','ampur','first_date_serv','date_serv','diagcode','b03x','follow_last'];
 const REPORT_LEVELS = { ampur: 'รายอำเภอ', hoscode: 'รายหน่วยบริการ', chw_addr: 'รายจังหวัด (ภูมิลำเนาผู้ป่วย)' };
+const PROVINCE_CODE = '49';
 const KNOWN_AMPUR = { '01':'เมืองมุกดาหาร','02':'นิคมคำสร้อย','03':'ดอนตาล','04':'ดงหลวง','05':'คำชะอี','06':'หว้านใหญ่','07':'หนองสูง' };
 // รายชื่อจังหวัดตามรหัส (อ้างอิง db/cchangwat.sql — มาตรฐานกระทรวงมหาดไทย) ใช้แปลรหัส chw_addr เป็นชื่อจังหวัดจริง
 const PROVINCE_NAMES = {
@@ -192,7 +193,14 @@ function groupKeyFor(p, level) {
   return p.ampur;
 }
 
-function buildReport(fy, level, dateFrom, dateTo) {
+// scope: 'all' | 'in' (ภูมิลำเนาในจังหวัดมุกดาหาร) | 'out' (นอกจังหวัด)
+function inScope(p, scope) {
+  if (scope === 'in') return p.chw_addr === PROVINCE_CODE;
+  if (scope === 'out') return p.chw_addr !== PROVINCE_CODE;
+  return true;
+}
+
+function buildReport(fy, level, dateFrom, dateTo, scope = 'all') {
   const maxAge = state.settings.max_age_included;
   const pop = state.population[fy] || {};
 
@@ -200,12 +208,14 @@ function buildReport(fy, level, dateFrom, dateTo) {
     if (p.fiscal_year_be > fy) return false;
     if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) return false;
     if (dateFrom && dateTo && !(p.first_date_serv >= dateFrom && p.first_date_serv <= dateTo)) return false;
-    return true;
+    return inScope(p, scope);
   });
 
   const groups = new Map();
   for (const p of filtered) {
-    const key = groupKeyFor(p, level);
+    // รายอำเภอ: รหัสอำเภอ 2 หลักซ้ำกันข้ามจังหวัด (เช่น 34-01) — ต้องแยกนอกจังหวัดออกก่อนจัดกลุ่ม
+    // ไม่งั้นผู้ป่วยนอกจังหวัดปนเข้ากลุ่ม 01-07 ทำให้ทั้งอำเภอตกไปเป็น "ไม่พบ/ผิดปกติ" หมด
+    const key = level === 'ampur' && p.chw_addr !== PROVINCE_CODE ? `x${p.chw_addr}` : groupKeyFor(p, level);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
@@ -217,17 +227,17 @@ function buildReport(fy, level, dateFrom, dateTo) {
       hoscodeLabel = ps.reduce((a, b) => (b.hosname && b.hosname.length > (a || '').length ? b.hosname : a), null);
     }
     const ampurRef = level === 'hoscode' ? (ps.map(p => p.ampur).sort()[0] || '') : (level === 'chw_addr' ? '' : key);
-    rows.push({ group_key: key, label: level === 'hoscode' ? hoscodeLabel : (level === 'chw_addr' ? provinceName(key) : key), ampur_ref: ampurRef, patients: ps });
+    rows.push({ group_key: key, label: level === 'hoscode' ? hoscodeLabel : (level === 'chw_addr' ? provinceName(key) : (KNOWN_AMPUR[key] || key)), ampur_ref: ampurRef, patients: ps });
   }
 
   // รวมกลุ่มนอกพื้นที่หลักเป็น "อื่นๆ" — ต้องเช็ค chw_addr ด้วย ไม่ใช่แค่ ampur เพราะรหัสอำเภอ 2 หลักซ้ำกันได้ข้ามจังหวัด
   if (level === 'ampur') {
-    const known = rows.filter(r => pop[r.ampur_ref] && r.patients.every(p => p.chw_addr === '49'));
-    const notKnown = rows.filter(r => !(pop[r.ampur_ref] && r.patients.every(p => p.chw_addr === '49')));
-    rows = known;
+    const isKnown = r => (pop[r.ampur_ref] || KNOWN_AMPUR[r.ampur_ref]) && r.patients.every(p => p.chw_addr === PROVINCE_CODE);
+    const notKnown = rows.filter(r => !isKnown(r));
+    rows = rows.filter(isKnown);
     const unknownPatients = notKnown.flatMap(r => r.patients);
-    const inProvince = unknownPatients.filter(p => p.chw_addr === '49');
-    const outProvince = unknownPatients.filter(p => p.chw_addr !== '49');
+    const inProvince = unknownPatients.filter(p => p.chw_addr === PROVINCE_CODE);
+    const outProvince = unknownPatients.filter(p => p.chw_addr !== PROVINCE_CODE);
     if (inProvince.length) rows.push({ group_key: 'other_in', label: 'ในจังหวัดมุกดาหาร (รหัสอำเภอไม่พบ/ผิดปกติ)', ampur_ref: null, patients: inProvince });
     if (outProvince.length) rows.push({ group_key: 'other', label: 'นอกจังหวัดมุกดาหาร', ampur_ref: null, patients: outProvince });
   } else if (level === 'chw_addr') {
@@ -287,7 +297,9 @@ function buildReport(fy, level, dateFrom, dateTo) {
     for (const key of ['b','c','d','f','j','k','m','n','zero_followup','repeat_violence_count','missing_birth','missing_tambon','missing_followup','same_day_followup']) totals[key] += line[key];
     totals.h += h; totals.i += i;
   }
-  report.sort((a, b) => b.d - a.d);
+  // กลุ่ม "ในจังหวัด (รหัสไม่พบ)" / "นอกจังหวัด" / "อื่นๆ" อยู่ท้ายตารางเสมอ
+  const tailRank = k => ({ other_in: 1, other: 2 }[k] || 0);
+  report.sort((a, b) => tailRank(a.group_key) - tailRank(b.group_key) || b.d - a.d);
   totals.e = pct(totals.d, totals.i);
   totals.l = pct(totals.k, totals.i);
   totals.o = pct(totals.n, totals.i);
@@ -370,7 +382,7 @@ function buildAccessRateTrend() {
 function buildYearlyTrendByAmpur() {
   const byAmpur = {};
   for (const p of state.patients) {
-    const key = KNOWN_AMPUR[p.ampur] ? p.ampur : 'other';
+    const key = KNOWN_AMPUR[p.ampur] && p.chw_addr === PROVINCE_CODE ? p.ampur : 'other';
     if (!byAmpur[key]) byAmpur[key] = {};
     byAmpur[key][p.fiscal_year_be] = (byAmpur[key][p.fiscal_year_be] || 0) + 1;
   }
