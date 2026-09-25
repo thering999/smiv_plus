@@ -207,10 +207,11 @@ test('buildViolenceTypeDropoutReportByArea: อำเภอที่ไม่ร
   const { areas } = engine.buildViolenceTypeDropoutReportByArea(2569, 'ampur', refDate);
   assert.equal(areas.find(a => a.key === '08'), undefined);
   assert.equal(areas.find(a => a.key === '12'), undefined);
-  const other = areas.find(a => a.key === 'other');
+  // chw_addr='49' (ในจังหวัด) แต่รหัสอำเภอไม่ใช่ 7 อำเภอหลัก → กลุ่ม other_in
+  const other = areas.find(a => a.key === 'other_in');
   assert.ok(other);
   assert.equal(other.total, 2);
-  assert.equal(other.label, 'นอกจังหวัดมุกดาหาร');
+  assert.equal(other.label, 'ในจังหวัดมุกดาหาร (รหัสอำเภอไม่พบ/ผิดปกติ)');
 });
 
 test('crossCheckRegistry: หา PID ที่มีในทะเบียน HDC แต่ขาดใน import และกลับกัน โดยเทียบ hoscode+pid', () => {
@@ -319,6 +320,20 @@ test('analyzeArea: E ปกติ (<=100%) ไม่ขึ้นคำเตื�
     missing_birth: 0, missing_tambon: 0, missing_followup: 0, same_day_followup: 0,
   });
   assert.ok(!findings.some(f => f.category === 'e_over_100'));
+});
+
+test('buildReport รายอำเภอ: ผู้ป่วยนอกจังหวัดที่รหัสอำเภอชนกัน (34-01) ไม่ทำให้เมืองมุกดาหารหายไป + E รวมไม่นับนอกจังหวัด', () => {
+  engine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  engine.state.population = { 2569: { '01': { name: 'เมืองมุกดาหาร', pop15_60: 10000, deceased: 0 } } };
+  engine.state.patients = [
+    mkPatient({ pid: '1', ampur: '01', chw_addr: '49', fiscal_year_be: 2569 }),
+    mkPatient({ pid: '2', ampur: '01', chw_addr: '34', fiscal_year_be: 2569 }),
+  ];
+  const { report, totals } = engine.buildReport(2569, 'ampur', null, null);
+  assert.equal(report.find(r => r.group_key === '01').d, 1);
+  assert.equal(report.find(r => r.group_key === 'other').d, 1);
+  assert.equal(totals.e, report.find(r => r.group_key === '01').e);
+  assert.equal(engine.buildReport(2569, 'ampur', null, null, 'out').totals.d, 1);
 });
 
 function mkPatient(overrides = {}) {
