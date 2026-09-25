@@ -36,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
 
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 $level = $_GET['level'] ?? 'ampur';
-$dateFrom = trim($_GET['date_from'] ?? '') ?: null;
-$dateTo = trim($_GET['date_to'] ?? '') ?: null;
+[$dateFrom, $dateTo, $q] = resolve_date_filter($fy);
 $data = build_smiv_report($pdo, $fy, $level, $dateFrom, $dateTo);
 $level = $data['level'];
 $areaOptions = $data['report']; // รายการพื้นที่ทั้งหมดของมุมมองนี้ ใช้ทำ dropdown กรองซ้อน
@@ -55,7 +54,7 @@ $maxAge = $data['max_age'];
 $hasPop = $data['has_population_data'];
 $areaLabel = REPORT_LEVELS[$level];
 $areaQs = $areaFilter !== '' ? '&area=' . urlencode($areaFilter) : '';
-$dateQs = ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '');
+$dateQs = ($q ? '&q=' . $q : '') . ($dateFrom ? '&date_from=' . $dateFrom : '') . ($dateTo ? '&date_to=' . $dateTo : '');
 
 $extra = build_extra_charts($pdo, $fy);
 $lastImport = $pdo->query('SELECT filename, imported_at, row_count FROM import_batches ORDER BY id DESC LIMIT 1')->fetch();
@@ -88,10 +87,21 @@ require __DIR__ . '/includes/header.php';
       <option value="<?= $lv ?>" <?= $lv === $level ? 'selected' : '' ?>><?= htmlspecialchars($lbl) ?></option>
     <?php endforeach; ?>
   </select>
+  <label>เลือก<?= htmlspecialchars($areaLabel) ?></label>
+  <select name="area">
+    <option value="">— ทั้งหมด —</option>
+    <?php foreach ($areaOptions as $opt): ?>
+      <option value="<?= htmlspecialchars($opt['group_key']) ?>" <?= $areaFilter === (string) $opt['group_key'] ? 'selected' : '' ?>>
+        <?= htmlspecialchars($opt['ampur_name']) ?> (D=<?= $opt['d'] ?>)
+      </option>
+    <?php endforeach; ?>
+  </select>
+  <?= quarter_select($q) ?>
   <label>ช่วงวันที่</label>
   <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom ?? '') ?>">
   <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo ?? '') ?>">
   <button type="submit">แสดงผล</button>
+  <?php if ($dateFrom || $dateTo): ?><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">ล้างช่วงวันที่</a><?php endif; ?>
 </form>
 
 <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
@@ -108,24 +118,6 @@ require __DIR__ . '/includes/header.php';
 </form>
 </details>
 <?php endif; ?>
-
-<?php if (!$report): ?>
-<p class="alert">ไม่มีข้อมูล — นำเข้าไฟล์ Excel ก่อน</p>
-<?php else: ?>
-    <option value="">— ทั้งหมด —</option>
-    <?php foreach ($areaOptions as $opt): ?>
-      <option value="<?= htmlspecialchars($opt['group_key']) ?>" <?= $areaFilter === (string) $opt['group_key'] ? 'selected' : '' ?>>
-        <?= htmlspecialchars($opt['ampur_name']) ?> (D=<?= $opt['d'] ?>)
-      </option>
-    <?php endforeach; ?>
-  </select>
-  <label>วันที่มารับบริการครั้งแรก ตั้งแต่</label>
-  <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom ?? '') ?>">
-  <label>ถึง</label>
-  <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo ?? '') ?>">
-  <button type="submit">แสดงผล</button>
-  <?php if ($dateFrom || $dateTo): ?><a href="<?= url('/index.php?fy=' . (int) $fy . '&level=' . $level . $areaQs) ?>">ล้างช่วงวันที่</a><?php endif; ?>
-</form>
 
 <?php if ($report): ?>
 <p>

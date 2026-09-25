@@ -7,7 +7,8 @@ require __DIR__ . '/includes/require_login.php';
 require __DIR__ . '/includes/report_data.php';
 
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
-$data = build_smiv_report($pdo, $fy, 'ampur');
+[$dateFrom, $dateTo, $q] = resolve_date_filter($fy);
+$data = build_smiv_report($pdo, $fy, 'ampur', $dateFrom, $dateTo);
 $totals = $data['totals'];
 
 $monthlyTrend = build_monthly_trend($pdo, $fy);
@@ -17,11 +18,12 @@ $sexDist = build_sex_distribution($pdo, $fy);
 $pageTitle = 'แดชบอร์ด - SMI-V Plus';
 require __DIR__ . '/includes/header.php';
 ?>
-<h1>แดชบอร์ด SMI-V (ปีงบ <?= (int) $fy ?>)</h1>
+<h1>แดชบอร์ด SMI-V (ปีงบ <?= (int) $fy ?><?= $q ? ' ' . FISCAL_QUARTERS[$q] : '' ?>)</h1>
 
 <form method="get" style="margin-bottom: 1rem;">
   <label>ปีงบประมาณ (พ.ศ.)</label>
   <input type="number" name="fy" value="<?= (int) $fy ?>" style="width: 100px;">
+  <?= quarter_select($q) ?>
   <button type="submit">เปลี่ยน</button>
 </form>
 

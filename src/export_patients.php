@@ -9,8 +9,7 @@ require __DIR__ . '/includes/report_data.php';
 $fy = isset($_GET['fy']) ? (int) $_GET['fy'] : current_fiscal_year_be($pdo);
 $level = $_GET['level'] ?? 'ampur';
 $area = trim($_GET['area'] ?? '');
-$dateFrom = trim($_GET['date_from'] ?? '') ?: null;
-$dateTo = trim($_GET['date_to'] ?? '') ?: null;
+[$dateFrom, $dateTo, $q] = resolve_date_filter($fy);
 
 $patients = get_problem_patients($pdo, $fy, $level, $area, $dateFrom, $dateTo);
 
