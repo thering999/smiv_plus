@@ -10,3 +10,5 @@ credentials.local.txt
 test_upload.xlsx
 .claude/settings.local.json
 worker/.wrangler/
+backups/
+docker-compose.yml.bak
