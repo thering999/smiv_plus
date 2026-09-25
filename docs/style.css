@@ -10,6 +10,7 @@ header.topbar .brand small{display:block;font-weight:400;font-size:.6em;opacity:
 .nav{display:flex;gap:6px}
 .nav-btn{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.9em;font-family:inherit;transition:background .15s}
 .nav-btn:hover{background:rgba(255,255,255,.15)}
+a.nav-btn{text-decoration:none;display:inline-block}
 .nav-btn.active{background:#fff;color:var(--primary);font-weight:600}
 .gate-overlay{position:fixed;inset:0;background:linear-gradient(135deg,var(--primary),var(--primary-dark));display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
 .gate-box{background:#fff;padding:32px;border-radius:16px;max-width:380px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,.4)}
