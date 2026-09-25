@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260925b">
+<link rel="stylesheet" href="style.css?v=20260925c">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
@@ -39,6 +39,7 @@
   <nav class="nav">
     <button type="button" class="nav-btn active" id="navDashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button type="button" class="nav-btn" id="navReference" onclick="showTab('reference')">📖 คู่มือรหัส</button>
+    <a class="nav-btn" href="links.html">🔗 ลิงก์ทั้งหมด</a>
     <button type="button" class="nav-btn" id="navLogout" onclick="sessionStorage.removeItem('smiv_gate_ok'); sessionStorage.removeItem('smiv_gate_role'); location.reload()">🔒 ออกจากระบบ</button>
   </nav>
   <div id="publishedAt" class="note" style="color:#fff"></div>
@@ -490,6 +491,7 @@ function showTab(tab) {
   document.getElementById('navDashboard').classList.toggle('active', tab === 'dashboard');
   document.getElementById('navReference').classList.toggle('active', tab === 'reference');
 }
+if (location.hash === '#reference') showTab('reference');
 
 // ด่านกันคนทั่วไป (obscurity เท่านั้น ไม่ใช่ security จริง — รหัสนี้อ่านได้จาก view-source เสมอ
 // คนที่เปิด dev tools ข้ามได้ทั้งด่านและ throttle นี้ — เป็นแค่กันคนกดมั่วธรรมดา)
@@ -556,7 +558,7 @@ const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
 })();
 </script>
 <!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260925b"></script>
-<script src="ui.js?v=20260925b"></script>
+<script src="app.js?v=20260925c"></script>
+<script src="ui.js?v=20260925c"></script>
 </body>
 </html>
