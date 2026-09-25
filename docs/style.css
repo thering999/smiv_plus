@@ -71,6 +71,8 @@ table.report-table thead th{background:linear-gradient(180deg,var(--primary-ligh
 table.report-table tbody tr:nth-child(even){background:#f9fafb}
 table.report-table tbody tr:hover{background:#eaf1f5}
 .total-row{font-weight:700;background:linear-gradient(180deg,#eef3f6,#e4ecf1) !important}
+.subtotal-row{font-weight:700;background:linear-gradient(90deg,#e3f1fb,#f2f9fd) !important;color:#14507a}
+.subtotal-row td:first-child{border-left:4px solid #1d6fa5}
 .note{color:#6b7280;font-size:.85em;line-height:1.6}
 .pop-input{width:110px;padding:4px 6px}
 footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
@@ -125,3 +127,19 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
   .table-scroll{overflow:visible}
   table.report-table{font-size:10px;width:100%}
 }
+
+/* ใน vs นอกจังหวัด */
+.scope-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:6px 0 18px}
+.scope-card{position:relative;overflow:hidden;border-radius:14px;padding:18px 20px;color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(20,40,60,.14);transition:transform .18s,box-shadow .18s,outline-color .18s;outline:3px solid transparent;outline-offset:2px}
+.scope-card::after{content:"";position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.12)}
+.scope-card:hover,.scope-card:focus-visible{transform:translateY(-3px);box-shadow:0 10px 26px rgba(20,40,60,.22)}
+.scope-card.scope-active{outline-color:#f5c542}
+.scope-in{background:linear-gradient(135deg,#1d6fa5,#4fb3e8)}
+.scope-out{background:linear-gradient(135deg,#d9534f,#f7a072)}
+.scope-card-label{font-weight:600;opacity:.95}
+.scope-card-value{font-size:2.2em;font-weight:800;line-height:1.15;margin:6px 0 2px}
+.scope-card-value small{font-size:.42em;font-weight:500;opacity:.9}
+.scope-card-share{font-size:.88em;opacity:.92}
+.scope-card-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.scope-card-meta span{background:rgba(255,255,255,.2);border-radius:999px;padding:3px 10px;font-size:.8em}
+@media print{.scope-card{box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}}

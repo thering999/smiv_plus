@@ -194,6 +194,8 @@ function populateFySelect() {
   else if (sorted.includes(state.settings.current_fiscal_year_be)) sel.value = state.settings.current_fiscal_year_be;
 }
 function currentLevel() { return $('#levelSelect').value || 'ampur'; }
+function currentScope() { return $('#scopeSelect').value || 'all'; }
+const SCOPE_LABELS = { all: 'ทั้งหมด', in: 'ในจังหวัดมุกดาหาร', out: 'นอกจังหวัดมุกดาหาร' };
 
 function populateAreaSelect(report) {
   const sel = $('#areaSelect');
@@ -235,8 +237,9 @@ function render() {
   const level = currentLevel();
   const dateFrom = $('#dateFrom').value || null;
   const dateTo = $('#dateTo').value || null;
+  const scope = currentScope();
 
-  const data = buildReport(fy, level, dateFrom, dateTo);
+  const data = buildReport(fy, level, dateFrom, dateTo, scope);
   let { report, totals, hasPopulationData } = data;
 
   populateAreaSelect(report);
@@ -278,13 +281,148 @@ function render() {
 
   renderTable(shownReport, shownTotals, level);
   renderFindings(report, level);
+  renderScopeComparison(fy, dateFrom, dateTo);
   renderCharts(report, totals, level, hasPopulationData);
   renderQualityScore(shownTotals);
   renderProblemPatients(fy, level, areaFilter);
   renderDataQualitySummary(report);
   renderYearComparison(fy);
-  syncUrlFromControls(fy, level, areaFilter);
+  syncUrlFromControls(fy, level, areaFilter, scope);
   saveLocal();
+}
+
+// ---------- เปรียบเทียบผู้ป่วยในจังหวัด vs นอกจังหวัด (ไม่ผูกกับตัวกรองขอบเขต เพื่อให้เห็นทั้งสองฝั่งเสมอ) ----------
+const SCOPE_COLORS = { in: ['#1d6fa5', '#4fb3e8'], out: ['#d9534f', '#f7a072'] };
+
+// ไล่สีแท่ง/ชิ้นกราฟ — ต้องรอ chartArea (render รอบแรกยังไม่มี) จึงคืนสีทึบไปก่อน
+function gradientFill(colors, horizontal) {
+  return ctx => {
+    const { chart } = ctx;
+    const area = chart.chartArea;
+    if (!area) return colors[0];
+    const g = horizontal
+      ? chart.ctx.createLinearGradient(area.left, 0, area.right, 0)
+      : chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
+    g.addColorStop(0, colors[0]);
+    g.addColorStop(1, colors[1]);
+    return g;
+  };
+}
+
+// ตัวเลขรวมกลางโดนัท
+const doughnutCenterText = {
+  id: 'doughnutCenterText',
+  afterDraw(chart, args, opts) {
+    if (!opts || !opts.text) return;
+    const { ctx, chartArea: a } = chart;
+    const x = (a.left + a.right) / 2, y = (a.top + a.bottom) / 2;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a1f24';
+    ctx.font = '700 26px Sarabun, sans-serif';
+    ctx.fillText(opts.text, x, y + 4);
+    ctx.fillStyle = '#6b7780';
+    ctx.font = '13px Sarabun, sans-serif';
+    ctx.fillText(opts.sub || '', x, y + 24);
+    ctx.restore();
+  },
+};
+
+function renderScopeComparison(fy, dateFrom, dateTo) {
+  const box = $('#scopeCompareBox');
+  if (!box) return;
+  const inT = buildReport(fy, 'ampur', dateFrom, dateTo, 'in').totals;
+  const outT = buildReport(fy, 'ampur', dateFrom, dateTo, 'out').totals;
+  const all = inT.d + outT.d;
+  box.hidden = !all;
+  if (!all) return;
+
+  const repeatPct = t => pct(t.repeat_violence_count, t.d);
+  const card = (key, t) => `
+    <div class="scope-card scope-${key}${currentScope() === key ? ' scope-active' : ''}" data-scope="${key}" role="button" tabindex="0" title="คลิกเพื่อกรองเฉพาะ${SCOPE_LABELS[key]}">
+      <div class="scope-card-label">${key === 'in' ? '🏠' : '🧭'} ${SCOPE_LABELS[key]}</div>
+      <div class="scope-card-value">${fmt(t.d)} <small>คน</small></div>
+      <div class="scope-card-share">${pct(t.d, all).toFixed(1)}% ของผู้ป่วยทั้งหมด</div>
+      <div class="scope-card-meta">
+        <span>เก่า ${fmt(t.b)}</span><span>ใหม่ ${fmt(t.c)}</span>
+        <span>ติดตาม≥2 ${fmt(t.m)}</span><span>ก่อซ้ำ ${repeatPct(t).toFixed(1)}%</span>
+      </div>
+    </div>`;
+  $('#scopeCards').innerHTML = card('in', inT) + card('out', outT);
+  $$('#scopeCards .scope-card').forEach(el => {
+    const pick = () => { $('#scopeSelect').value = currentScope() === el.dataset.scope ? 'all' : el.dataset.scope; render(); };
+    el.addEventListener('click', pick);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+
+  drawChart('chartScopeShare', {
+    type: 'doughnut',
+    data: {
+      labels: [SCOPE_LABELS.in, SCOPE_LABELS.out],
+      datasets: [{ data: [inT.d, outT.d], backgroundColor: [SCOPE_COLORS.in[0], SCOPE_COLORS.out[0]], hoverOffset: 10, borderWidth: 3, borderColor: '#fff' }],
+    },
+    options: {
+      responsive: true, aspectRatio: 1.6, cutout: '66%',
+      plugins: {
+        legend: { position: 'bottom' },
+        doughnutCenterText: { text: fmt(all), sub: 'คนทั้งหมด' },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${fmt(c.raw)} คน (${pct(c.raw, all).toFixed(1)}%)` } },
+      },
+    },
+    plugins: [doughnutCenterText],
+  });
+
+  const metrics = [
+    ['ติดตาม ≥2 ครั้ง', t => pct(t.m, t.d)],
+    ['ติดตาม 1 ครั้ง', t => pct(t.j, t.d)],
+    ['ไม่เคยติดตามซ้ำ', t => pct(t.zero_followup, t.d)],
+    ['ไม่ก่อซ้ำ', t => pct(t.f, t.d)],
+    ['ก่อความรุนแรงซ้ำ', repeatPct],
+  ];
+  const scopeBar = (key, t) => ({
+    label: SCOPE_LABELS[key], data: metrics.map(([, fn]) => fn(t)),
+    backgroundColor: gradientFill(SCOPE_COLORS[key], true), borderRadius: 6, borderSkipped: false,
+  });
+  drawChart('chartScopeMetrics', {
+    type: 'bar',
+    data: { labels: metrics.map(([l]) => l), datasets: [scopeBar('in', inT), scopeBar('out', outT)] },
+    options: {
+      responsive: true, indexAxis: 'y',
+      scales: { x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }, y: { grid: { display: false } } },
+      plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toFixed(1)}%` } } },
+    },
+  });
+
+  // จังหวัดภูมิลำเนาของผู้ป่วยนอกจังหวัด (buildReport รวม top 8 + "อื่นๆ" ให้แล้ว)
+  const top = buildReport(fy, 'chw_addr', dateFrom, dateTo, 'out').report;
+  $('#scopeProvinceBox').hidden = !top.length;
+  drawChart('chartScopeProvinces', {
+    type: 'bar',
+    data: { labels: top.map(r => r.ampur_name), datasets: [{ label: 'ผู้ป่วย (คน)', data: top.map(r => r.d), backgroundColor: gradientFill(SCOPE_COLORS.out, true), borderRadius: 6, borderSkipped: false }] },
+    options: {
+      responsive: true, indexAxis: 'y',
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+
+  // ผู้ป่วยในจังหวัด แยก 7 อำเภอ (เก่า/ใหม่)
+  const inAmpur = buildReport(fy, 'ampur', dateFrom, dateTo, 'in').report;
+  drawChart('chartScopeAmpur', {
+    type: 'bar',
+    data: {
+      labels: inAmpur.map(r => r.group_key === 'other_in' ? 'ไม่ระบุอำเภอ' : r.ampur_name),
+      datasets: [
+        { label: 'ผู้ป่วยเก่า (B)', data: inAmpur.map(r => r.b), backgroundColor: gradientFill(['#1d6fa5', '#2f8fcf'], false), borderRadius: 4 },
+        { label: 'ผู้ป่วยใหม่ (C)', data: inAmpur.map(r => r.c), backgroundColor: gradientFill(['#4fb3e8', '#a6dcf7'], false), borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } },
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
 }
 
 // ---------- สรุปคุณภาพข้อมูลรวมทั้งจังหวัด ----------
@@ -392,11 +530,12 @@ function checkLowAccessRatePersistence(ePct, hasPopulationData) {
 
 const LAST_VIEW_KEY = 'smivplus_last_view';
 
-function syncUrlFromControls(fy, level, area) {
+function syncUrlFromControls(fy, level, area, scope) {
   const params = new URLSearchParams();
   params.set('fy', fy);
   if (level !== 'ampur') params.set('level', level);
   if (area) params.set('area', area);
+  if (scope && scope !== 'all') params.set('scope', scope);
   const qs = params.toString();
   const newUrl = location.pathname + (qs ? '?' + qs : '');
   if (newUrl !== location.pathname + location.search) history.replaceState(null, '', newUrl);
@@ -417,6 +556,8 @@ function applyUrlToControls() {
     } catch (e) {}
   }
 
+  const scope = params.get('scope');
+  if (SCOPE_LABELS[scope]) $('#scopeSelect').value = scope;
   if (fy) $('#fySelect').dataset.pendingUrlFy = fy;
   if (level) $('#levelSelect').value = level;
   if (area) $('#areaSelect').dataset.pendingUrlArea = area;
@@ -437,6 +578,13 @@ let mainTableSortKey = null;
 let mainTableSortDir = 'asc';
 let mainTableSearch = '';
 
+function sumReportRows(rows, label) {
+  const s = { ampur_name: label, subtotal: true };
+  for (const k of ['b','c','d','f','h','i','j','k','m','n','missing_followup']) s[k] = rows.reduce((a, r) => a + r[k], 0);
+  s.e = pct(s.d, s.i); s.l = pct(s.k, s.i); s.o = pct(s.n, s.i); s.g = s.o;
+  return s;
+}
+
 function renderTable(report, totals, level) {
   const tbody = $('#reportTableBody');
 
@@ -454,8 +602,15 @@ function renderTable(report, totals, level) {
   }
   report = rows;
 
+  // รายอำเภอ + ดูทั้งหมด: แทรกแถว "รวมในจังหวัด" ก่อนแถวนอกจังหวัด ให้เห็นยอดแยก ใน/นอก ครบในตารางเดียว
+  if (level === 'ampur' && currentScope() === 'all' && !mainTableSearch.trim() && !mainTableSortKey) {
+    const inRows = report.filter(r => r.group_key !== 'other');
+    const outRows = report.filter(r => r.group_key === 'other');
+    if (inRows.length && outRows.length) report = [...inRows, sumReportRows(inRows, 'รวมในจังหวัดมุกดาหาร'), ...outRows];
+  }
+
   tbody.innerHTML = report.map(r => `
-    <tr>
+    <tr${r.subtotal ? ' class="subtotal-row"' : ''}>
       <td>${escapeHtml(r.ampur_name)}</td>
       <td>${fmt(r.b)}</td><td>${fmt(r.c)}</td><td>${fmt(r.d)}</td>
       <td>${r.e.toFixed(2)}</td><td>${fmt(r.f)}</td><td>${r.g.toFixed(2)}</td>
@@ -473,7 +628,8 @@ function renderTable(report, totals, level) {
       <td>${fmt(totals.m)}</td><td>${fmt(totals.n)}</td><td>${totals.o.toFixed(2)}</td>
       <td>${fmt(totals.missing_followup)}</td>
     </tr>`;
-  $('#tableAreaLabel').textContent = REPORT_LEVELS[level];
+  const scope = currentScope();
+  $('#tableAreaLabel').textContent = REPORT_LEVELS[level] + (scope !== 'all' ? ` · ${SCOPE_LABELS[scope]}` : '');
 
   $$('table.report-table thead th[data-sort-key]').forEach(th => {
     th.classList.toggle('sorted-col', th.dataset.sortKey === mainTableSortKey);
@@ -980,8 +1136,9 @@ function saveSettingsFromForm() {
 // ---------- Excel export (SheetJS) ----------
 function exportReportXlsx(levelOverride) {
   const fy = currentFy(), level = levelOverride || currentLevel();
-  const { report, totals } = buildReport(fy, level, $('#dateFrom').value || null, $('#dateTo').value || null);
-  const areaLabel = REPORT_LEVELS[level];
+  const scope = currentScope();
+  const { report, totals } = buildReport(fy, level, $('#dateFrom').value || null, $('#dateTo').value || null, scope);
+  const areaLabel = REPORT_LEVELS[level] + (scope !== 'all' ? ` (${SCOPE_LABELS[scope]})` : '');
   const header = [`รายงาน SMI-V ปีงบประมาณ ${fy} — ${areaLabel}`];
   const cols = ['พื้นที่','เก่า (B)','ใหม่ (C)','รวม (D)','อัตราเข้าถึงบริการ E (%)','ไม่ก่อซ้ำสะสม (F)','ร้อยละต่อเนื่องไม่ก่อซ้ำ G (%)','ประชากร H','ประมาณการณ์ I','ติดตาม1ครั้ง J','J ไม่ก่อซ้ำ K','L=K/I*100','ติดตาม≥2ครั้ง M','M ไม่ก่อซ้ำ N','O=N/I*100','ขาดการติดตาม'];
   const rows = report.map(r => [r.ampur_name, r.b, r.c, r.d, r.e, r.f, r.g, r.h, r.i, r.j, r.k, r.l, r.m, r.n, r.o, r.missing_followup]);
@@ -1518,6 +1675,7 @@ async function init() {
   const exportImgBtn = $('#exportMainTableImgBtn');
   if (exportImgBtn) exportImgBtn.addEventListener('click', () => exportTableAsImage('#reportTableBody', `smiv_table_${currentFy()}.png`));
   $('#areaSelect').addEventListener('change', render);
+  $('#scopeSelect').addEventListener('change', render);
   $('#dateFrom').addEventListener('change', render);
   $('#dateTo').addEventListener('change', render);
   $('#clearDates').addEventListener('click', () => { $('#dateFrom').value = ''; $('#dateTo').value = ''; render(); });
