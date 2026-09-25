@@ -15,7 +15,19 @@ $adminPages = ['import_upload.php', 'population_edit.php', 'users.php', 'setting
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= $pageTitle ?? 'SMI-V Plus' ?></title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+<link rel="manifest" href="<?= url('/manifest.webmanifest.php') ?>">
+<meta name="theme-color" content="#2c6e91">
+<link rel="apple-touch-icon" href="<?= url('/assets/icons/icon-192.svg') ?>">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SMI-V Plus">
 <link rel="stylesheet" href="<?= url('/assets/css/style.css') ?>">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('<?= url('/sw.js') ?>');
+  });
+}
+</script>
 </head>
 <body>
 <header class="topbar">
