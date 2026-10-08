@@ -1267,6 +1267,7 @@ let ppPriorityFilter = '';
 let ppSortKey = 'daysOverdue';
 let ppSortDir = 'desc';
 let ppVisibleCount = 20;
+let ppOverdueOnly = false;
 
 const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'อำเภอ/ตำบล', daysOverdue: 'ค้างติดตามมา' };
 const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
@@ -1281,6 +1282,7 @@ function renderProblemPatientsTable() {
 
   let rows = problemPatientsAll;
   if (ppPriorityFilter) rows = rows.filter(r => r.priority === ppPriorityFilter);
+  if (ppOverdueOnly) rows = rows.filter(({ p }) => followupDue(p) === 'overdue');
   if (ppSearchTerm.trim()) {
     const term = ppSearchTerm.trim().toLowerCase();
     rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon].some(v => (v || '').toLowerCase().includes(term)));
@@ -1314,6 +1316,7 @@ function renderProblemPatientsTable() {
       <td>${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
       <td>${issues.join(', ')}</td>
+      ${piiLoaded ? `<td>${followupCellHtml(p)}</td>` : ''}
     </tr>`).join('');
 
   box.innerHTML = `
@@ -1327,15 +1330,21 @@ function renderProblemPatientsTable() {
           <option value="กลาง" ${ppPriorityFilter === 'กลาง' ? 'selected' : ''}>🟠 กลาง</option>
           <option value="ปกติ" ${ppPriorityFilter === 'ปกติ' ? 'selected' : ''}>⚪ ปกติ</option>
         </select></div>
+      ${piiLoaded ? `<label style="margin-bottom:9px"><input type="checkbox" id="ppOverdueOnly" ${ppOverdueOnly ? 'checked' : ''}> เฉพาะเกินวันนัด</label>` : ''}
       <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน</div>
     </div>
     <div class="table-scroll"><table class="report-table">
-    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th></tr></thead>
+    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th>${piiLoaded ? '<th>การติดตาม</th>' : ''}</tr></thead>
     <tbody>${rowsHtml}</tbody></table></div>
     ${filteredCount > ppVisibleCount ? `<button class="btn btn-outline" id="ppShowMoreBtn" style="margin-top:10px">แสดงเพิ่ม (${Math.min(50, filteredCount - ppVisibleCount)} จาก ${filteredCount - ppVisibleCount} ที่เหลือ)</button>` : ''}`;
 
   $('#ppSearchInput').addEventListener('input', e => { ppSearchTerm = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
   $('#ppPriorityFilter').addEventListener('change', e => { ppPriorityFilter = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
+  const overdueBox = $('#ppOverdueOnly');
+  if (overdueBox) overdueBox.addEventListener('change', e => { ppOverdueOnly = e.target.checked; ppVisibleCount = 20; renderProblemPatientsTable(); });
+  $$('#problemPatientsBox [data-followup]').forEach(btn => {
+    btn.addEventListener('click', () => { const [h, id] = btn.getAttribute('data-followup').split('|'); openFollowupDialog(h, id); });
+  });
   const moreBtn = $('#ppShowMoreBtn');
   if (moreBtn) moreBtn.addEventListener('click', () => { ppVisibleCount += 50; renderProblemPatientsTable(); });
   $$('#problemPatientsBox th[data-sort-key]').forEach(el => {
@@ -1515,6 +1524,136 @@ function applyRealPatients(result) {
     : `เห็นข้อมูลทั้งจังหวัด (${(scope.patientCount || result.patients.length).toLocaleString('th-TH')} คน)`;
   render();
   renderAuthState();
+  loadFollowups();
+}
+
+// ---------- การติดตามผู้ป่วยรายคน (เก็บใน Worker เท่านั้น ต้องล็อกอิน) ----------
+const FOLLOWUP_STATUS_LABELS = {
+  visited: 'เยี่ยมบ้านแล้ว', phone: 'ติดตามทางโทรศัพท์', not_found: 'ไม่พบตัว', refused: 'ปฏิเสธการรักษา',
+  referred: 'ส่งต่อ', stable: 'อาการคงที่', closed: 'ปิดเคส',
+};
+let followupMap = {};
+
+function followupKeyOf(p) { return `${p.hoscode}-${p.pid}`; }
+
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 'overdue' = เลยวันนัดแล้ว · 'today' = นัดวันนี้ · null = ไม่มีนัด/ยังไม่ถึง/ปิดเคสแล้ว
+function followupDue(p) {
+  const f = followupMap[followupKeyOf(p)];
+  if (!f || !f.nextDate || f.lastStatus === 'closed') return null;
+  const today = todayIso();
+  return f.nextDate < today ? 'overdue' : f.nextDate === today ? 'today' : null;
+}
+
+function followupCellHtml(p) {
+  const f = followupMap[followupKeyOf(p)];
+  const due = followupDue(p);
+  const info = f
+    ? `<div>${escapeHtml(FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '-')}</div>
+       <div class="note" style="margin:2px 0">ล่าสุด ${escapeHtml(new Date(f.lastAt).toLocaleDateString('th-TH'))}${f.nextDate ? ` · นัด ${escapeHtml(new Date(f.nextDate + 'T00:00:00').toLocaleDateString('th-TH'))}` : ''}</div>
+       ${due === 'overdue' ? '<span class="followup-badge overdue">เกินนัด</span>' : due === 'today' ? '<span class="followup-badge today">นัดวันนี้</span>' : ''}`
+    : '<div class="note">ยังไม่มีบันทึก</div>';
+  return `${info}<button type="button" class="btn btn-outline" style="padding:2px 8px;font-size:.8em;margin-top:4px" data-followup="${escapeHtml(p.hoscode)}|${escapeHtml(p.pid)}">📝 บันทึก</button>`;
+}
+
+async function loadFollowups() {
+  if (!isLoggedIn()) { followupMap = {}; return; }
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/followups`, { headers: authHeaders(), cache: 'no-store' });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) return; // Worker เก่ายังไม่มี endpoint → ตารางทำงานต่อได้ แค่ไม่มีข้อมูลติดตาม
+    followupMap = {};
+    for (const item of result.items || []) followupMap[`${item.hoscode}-${item.pid}`] = item;
+    renderProblemPatientsTable();
+  } catch (e) { /* offline → ข้ามได้ */ }
+}
+
+function followupDialog() {
+  let dlg = document.getElementById('followupDialog');
+  if (dlg) return dlg;
+  dlg = document.createElement('dialog');
+  dlg.id = 'followupDialog';
+  dlg.className = 'followup-dialog';
+  dlg.setAttribute('aria-labelledby', 'followupTitle');
+  dlg.innerHTML = `<form id="followupForm">
+    <h3 id="followupTitle" style="margin-top:0">บันทึกการติดตาม</h3>
+    <div id="followupWho" class="note"></div>
+    <label for="followupStatus">สถานะ</label>
+    <select id="followupStatus" required>${Object.entries(FOLLOWUP_STATUS_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+    <label for="followupNext">วันนัดติดตามครั้งถัดไป</label>
+    <input type="date" id="followupNext">
+    <label for="followupNote">บันทึก (ไม่เกิน 500 ตัวอักษร)</label>
+    <textarea id="followupNote" maxlength="500" rows="3"></textarea>
+    <div id="followupMsg" class="status" role="status"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="submit" class="btn" id="followupSave">บันทึก</button>
+      <button type="button" class="btn btn-outline" id="followupCancel">ปิด</button>
+    </div>
+    <h4>ประวัติการติดตาม</h4>
+    <div id="followupHistory" class="note">กำลังโหลด...</div>
+  </form>`;
+  document.body.appendChild(dlg);
+  dlg.querySelector('#followupCancel').addEventListener('click', () => dlg.close());
+  dlg.querySelector('#followupForm').addEventListener('submit', e => { e.preventDefault(); saveFollowup(); });
+  return dlg;
+}
+
+async function openFollowupDialog(hoscode, pid) {
+  const dlg = followupDialog();
+  const p = state.patients.find(x => String(x.hoscode) === hoscode && String(x.pid) === pid) || {};
+  dlg.dataset.hoscode = hoscode;
+  dlg.dataset.pid = pid;
+  dlg.querySelector('#followupWho').textContent = `${p.name || ''} ${p.lname || ''} · ${p.hosname || hoscode} · pid ${pid}`;
+  dlg.querySelector('#followupNote').value = '';
+  dlg.querySelector('#followupNext').value = '';
+  dlg.querySelector('#followupMsg').textContent = '';
+  dlg.showModal();
+  const hist = dlg.querySelector('#followupHistory');
+  hist.textContent = 'กำลังโหลด...';
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/followups?hoscode=${encodeURIComponent(hoscode)}&pid=${encodeURIComponent(pid)}`, { headers: authHeaders(), cache: 'no-store' });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `โหลดไม่สำเร็จ (${res.status})`);
+    const entries = (result.entries || []).slice().reverse();
+    hist.innerHTML = entries.length ? `<ul class="followup-history">${entries.map(en => `<li>
+      <strong>${escapeHtml(new Date(en.at).toLocaleString('th-TH'))}</strong> · ${escapeHtml(FOLLOWUP_STATUS_LABELS[en.status] || en.status)} · โดย ${escapeHtml(en.by)}
+      ${en.nextDate ? ` · นัด ${escapeHtml(en.nextDate)}` : ''}${en.note ? `<div>${escapeHtml(en.note)}</div>` : ''}</li>`).join('')}</ul>` : 'ยังไม่มีบันทึก';
+  } catch (e) {
+    hist.textContent = 'โหลดประวัติไม่สำเร็จ: ' + e.message;
+  }
+}
+
+async function saveFollowup() {
+  const dlg = followupDialog();
+  const msg = dlg.querySelector('#followupMsg');
+  const btn = dlg.querySelector('#followupSave');
+  btn.disabled = true;
+  msg.textContent = 'กำลังบันทึก...';
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/followups`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({
+        hoscode: dlg.dataset.hoscode, pid: dlg.dataset.pid,
+        status: dlg.querySelector('#followupStatus').value,
+        nextDate: dlg.querySelector('#followupNext').value || null,
+        note: dlg.querySelector('#followupNote').value,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (res.status === 401) { clearAuth(); throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
+    if (!res.ok) throw new Error(result.error || `บันทึกไม่สำเร็จ (${res.status})`);
+    followupMap[`${result.summary.hoscode}-${result.summary.pid}`] = result.summary;
+    dlg.close();
+    renderProblemPatientsTable();
+  } catch (e) {
+    msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderAuthState() {
@@ -1839,7 +1978,7 @@ async function loadPrivateHistoryList() {
 
 // ---------- บันทึกการเข้าถึงข้อมูล (audit log, PDPA) — เฉพาะ admin ----------
 const AUDIT_ACTION_LABELS = {
-  login: 'เข้าสู่ระบบ', 'patient-data': 'เปิดดูข้อมูลจริง', publish: 'เผยแพร่', restore: 'กู้คืนข้อมูลจริง',
+  login: 'เข้าสู่ระบบ', 'patient-data': 'เปิดดูข้อมูลจริง', publish: 'เผยแพร่', restore: 'กู้คืนข้อมูลจริง', followup: 'บันทึกการติดตาม',
 };
 let auditItems = [];
 

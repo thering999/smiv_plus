@@ -142,3 +142,11 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
 @media print{.scope-card{box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 
 .audit-fail td { color: #b42318; }
+
+.followup-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .8em; font-weight: 600; }
+.followup-badge.overdue { background: #fde8e6; color: #b42318; }
+.followup-badge.today { background: #fff4d6; color: #8a5a00; }
+.followup-dialog { max-width: min(520px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: 10px; }
+.followup-dialog label { display: block; font-weight: 600; font-size: .85em; margin: 10px 0 4px; }
+.followup-dialog select, .followup-dialog input, .followup-dialog textarea { width: 100%; box-sizing: border-box; padding: 8px; font-family: inherit; }
+.followup-history { padding-left: 18px; max-height: 220px; overflow: auto; }

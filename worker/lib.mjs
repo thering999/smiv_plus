@@ -325,6 +325,48 @@ export async function readAudit(storage, { days = 7, nowMs = Date.now(), limit =
   return items.filter(Boolean);
 }
 
+// ---------- การติดตามผู้ป่วยรายคน (ข้อมูลส่วนตัว อยู่ใน Worker เท่านั้น) ----------
+// key: followup/<ampur>/<hoscode>-<pid> → { hoscode, pid, ampur, entries: [{at, by, status, note, nextDate}] }
+// ampur มาจากข้อมูลผู้ป่วยฝั่ง server เสมอ (ไม่เชื่อ client) → list ตาม prefix อำเภอได้ และกันเขียนข้ามอำเภอ
+export const FOLLOWUP_PREFIX = 'followup/';
+export const FOLLOWUP_STATUSES = ['visited', 'phone', 'not_found', 'refused', 'referred', 'stable', 'closed'];
+export const FOLLOWUP_NOTE_MAX = 500;
+export const FOLLOWUP_MAX_ENTRIES = 50;
+const ID_PART = /^[0-9A-Za-z]{1,20}$/;
+
+export function followupKey(ampur, hoscode, pid) {
+  return `${FOLLOWUP_PREFIX}${ampur}/${hoscode}-${pid}`;
+}
+
+export function validateFollowupInput(body, { nowMs = Date.now() } = {}) {
+  const b = body && typeof body === 'object' ? body : {};
+  const hoscode = String(b.hoscode || '');
+  const pid = String(b.pid || '');
+  if (!ID_PART.test(hoscode) || !ID_PART.test(pid)) return { ok: false, error: 'hoscode/pid ไม่ถูกต้อง' };
+  if (!FOLLOWUP_STATUSES.includes(b.status)) return { ok: false, error: 'สถานะการติดตามไม่ถูกต้อง' };
+  const note = String(b.note || '').trim();
+  if (note.length > FOLLOWUP_NOTE_MAX) return { ok: false, error: `บันทึกยาวเกิน ${FOLLOWUP_NOTE_MAX} ตัวอักษร` };
+  let nextDate = null;
+  if (b.nextDate) {
+    nextDate = String(b.nextDate);
+    const t = Date.parse(`${nextDate}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || !Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== nextDate) return { ok: false, error: 'วันนัดถัดไปต้องเป็นรูปแบบ YYYY-MM-DD' };
+    if (t > nowMs + 366 * 86400000) return { ok: false, error: 'วันนัดถัดไปต้องไม่เกิน 1 ปี' };
+  }
+  return { ok: true, value: { hoscode, pid, status: b.status, note, nextDate } };
+}
+
+export function summarizeFollowup(record) {
+  const entries = Array.isArray(record && record.entries) ? record.entries : [];
+  const last = entries[entries.length - 1] || null;
+  return {
+    hoscode: record.hoscode, pid: record.pid, ampur: record.ampur,
+    count: entries.length,
+    lastAt: last ? last.at : null, lastStatus: last ? last.status : null, lastBy: last ? last.by : null,
+    nextDate: last ? last.nextDate : null,
+  };
+}
+
 function clientIp(request) {
   return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown-ip';
 }
@@ -644,6 +686,67 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     return json(request, env, { ok: true, remaining: list.length });
   }
 
+  // GET /followups → สรุปล่าสุดของทุกคนในขอบเขตผู้ใช้ · GET /followups?hoscode=&pid= → ประวัติเต็มของคนนั้น
+  async function handleFollowupList(request, env, url) {
+    const auth = await requireUser(request, env);
+    if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
+    const storage = storageFor(env);
+    if (!storage) return json(request, env, { error: STORAGE_MISSING_MESSAGE }, 503);
+    const { user } = auth;
+    const scopeAll = user.role === 'admin';
+    if (!scopeAll && !user.ampur) return json(request, env, { ok: true, items: [] }, 200, { 'Cache-Control': 'no-store' });
+
+    const hoscode = url.searchParams.get('hoscode');
+    const pid = url.searchParams.get('pid');
+    if (hoscode || pid) {
+      if (!ID_PART.test(hoscode || '') || !ID_PART.test(pid || '')) return json(request, env, { error: 'hoscode/pid ไม่ถูกต้อง' }, 400);
+      const prefix = scopeAll ? FOLLOWUP_PREFIX : `${FOLLOWUP_PREFIX}${user.ampur}/`;
+      const key = (await storeList(storage, prefix)).find(k => k.endsWith(`/${hoscode}-${pid}`));
+      const record = key ? await storeGet(storage, key) : null;
+      return json(request, env, { ok: true, entries: record && Array.isArray(record.entries) ? record.entries : [] }, 200, { 'Cache-Control': 'no-store' });
+    }
+
+    const prefix = scopeAll ? FOLLOWUP_PREFIX : `${FOLLOWUP_PREFIX}${user.ampur}/`;
+    const keys = await storeList(storage, prefix);
+    const records = await Promise.all(keys.map(k => storeGet(storage, k)));
+    const items = records.filter(Boolean).map(summarizeFollowup);
+    return json(request, env, { ok: true, items }, 200, { 'Cache-Control': 'no-store' });
+  }
+
+  async function handleFollowupAdd(request, env) {
+    const auth = await requireUser(request, env);
+    if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
+    const storage = storageFor(env);
+    if (!storage) return json(request, env, { error: STORAGE_MISSING_MESSAGE }, 503);
+    let body;
+    try { body = await request.json(); } catch (e) { return json(request, env, { error: 'invalid JSON body' }, 400); }
+    const check = validateFollowupInput(body, { nowMs: nowMs() });
+    if (!check.ok) return json(request, env, { error: check.error }, 400);
+    const { hoscode, pid, status, note, nextDate } = check.value;
+
+    // อ้างอิงผู้ป่วยจากข้อมูลจริงฝั่ง server เพื่อหาอำเภอ แล้วตรวจสิทธิ์อำเภอ
+    const full = await storeGet(storage, PII_CURRENT_KEY);
+    const patients = full && Array.isArray(full.patients) ? full.patients : [];
+    const target = patients.find(p => String(p.hoscode) === hoscode && String(p.pid) === pid);
+    if (!target) return json(request, env, { error: 'ไม่พบผู้ป่วยรายนี้ในข้อมูลปัจจุบัน' }, 404);
+    const ampur = String(target.ampur || '');
+    if (!ID_PART.test(ampur)) return json(request, env, { error: 'ข้อมูลอำเภอของผู้ป่วยไม่ถูกต้อง' }, 422);
+    if (scopePatientsForUser([target], auth.user).length === 0) {
+      return json(request, env, { error: 'บัญชีนี้ไม่มีสิทธิ์บันทึกการติดตามผู้ป่วยนอกอำเภอที่รับผิดชอบ' }, 403);
+    }
+
+    const key = followupKey(ampur, hoscode, pid);
+    const record = (await storeGet(storage, key)) || { hoscode, pid, ampur, entries: [] };
+    const entry = { at: new Date(nowMs()).toISOString(), by: auth.user.username, status, note, nextDate };
+    record.entries = [...(Array.isArray(record.entries) ? record.entries : []), entry].slice(-FOLLOWUP_MAX_ENTRIES);
+    await storePut(storage, key, record);
+    await writeAudit(storage, {
+      action: 'followup', username: auth.user.username, role: auth.user.role, ampur,
+      ok: true, status: 200, detail: `${hoscode}-${pid}:${status}`, ip: clientIp(request),
+    }, nowMs());
+    return json(request, env, { ok: true, entry, summary: summarizeFollowup(record) });
+  }
+
   async function handleAudit(request, env, url) {
     const auth = await requireUser(request, env, ['admin']);
     if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
@@ -709,6 +812,14 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
 
       if ((request.method === 'POST' || request.method === 'GET') && path === '/patient-data') {
         return handlePatientData(request, env);
+      }
+
+      if (request.method === 'GET' && path === '/followups') {
+        return handleFollowupList(request, env, url);
+      }
+
+      if (request.method === 'POST' && path === '/followups') {
+        return handleFollowupAdd(request, env);
       }
 
       if (request.method === 'GET' && path === '/audit') {
