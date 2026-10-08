@@ -18,3 +18,7 @@ docker-compose.yml.bak
 docs/exchange_file*.xlsx
 # สำเนาประวัติที่เผยแพร่ — Worker เขียนขึ้น GitHub เองผ่าน API (ไม่ต้อง commit จากเครื่อง)
 docs/history/*.json
+# ไฟล์ Excel ผู้ป่วยทุกชื่อใน docs/ (เว็บสาธารณะ) — ห้าม commit
+docs/*.xlsx
+docs/*.xls
+docs/*.csv
