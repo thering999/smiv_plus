@@ -247,3 +247,16 @@ test('followupCoverage: นับติดตามใน 90 วัน และ
   assert.deepEqual({ ...cov['01'] }, { total: 3, followed: 2, overdue: 2 });
   assert.deepEqual({ ...cov['02'] }, { total: 1, followed: 0, overdue: 0 });
 });
+
+test('buildWorklistHtml: 1 section ต่อหน่วยบริการ, เรียงความสำคัญ, escape HTML', () => {
+  const rows = [
+    { p: { hoscode: 'A', hosname: 'รพ.สต.ก', pid: '1', name: '<img src=x onerror=alert(1)>', lname: 'x', ampur: '01' }, priority: 'ปกติ', daysOverdue: 10 },
+    { p: { hoscode: 'A', hosname: 'รพ.สต.ก', pid: '2', name: 'สูงสุด', lname: 'y', ampur: '01' }, priority: 'สูง', daysOverdue: 5 },
+    { p: { hoscode: 'B', hosname: 'รพ.สต.ข', pid: '3', name: 'z', lname: 'z', ampur: '02' }, priority: 'กลาง', daysOverdue: null },
+  ];
+  const html = sandbox.buildWorklistHtml(rows, '2026-10-08');
+  assert.equal((html.match(/<section>/g) || []).length, 2);
+  assert.ok(!html.includes('<img src=x'), 'ต้อง escape ชื่อ');
+  assert.ok(html.indexOf('สูงสุด') < html.indexOf('&lt;img'), 'ความสำคัญสูงต้องมาก่อน');
+  assert.ok(html.includes('PDPA'));
+});

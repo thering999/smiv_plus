@@ -1434,6 +1434,72 @@ function exportIssuesXlsx() {
   XLSX.writeFile(wb, `smiv_problem_patients_${level}_${fy}.xlsx`);
 }
 
+// ---------- ใบงานติดตามสำหรับพิมพ์: 1 หน้าต่อ 1 หน่วยบริการ (เฉพาะผู้ที่ล็อกอิน) ----------
+function buildWorklistHtml(rows, todayYmd) {
+  const byHos = new Map();
+  for (const r of rows) {
+    const key = r.p.hosname || r.p.hoscode || '-';
+    if (!byHos.has(key)) byHos.set(key, []);
+    byHos.get(key).push(r);
+  }
+  const sortRows = list => list.slice().sort((a, b) =>
+    (PP_PRIORITY_ORDER[a.priority] - PP_PRIORITY_ORDER[b.priority]) || ((b.daysOverdue ?? -1) - (a.daysOverdue ?? -1)));
+  const sections = [...byHos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'th')).map(([hos, list]) => {
+    const body = sortRows(list).map((r, i) => {
+      const { p } = r;
+      const f = followupMap[followupKeyOf(p)];
+      const due = followupDue(p);
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${r.priority === 'สูง' ? '🔴' : r.priority === 'กลาง' ? '🟠' : '⚪'} ${escapeHtml(r.priority)}</td>
+        <td>${escapeHtml(`${p.name || ''} ${p.lname || ''}`)}<br><small>cid ${escapeHtml(p.cid || '-')} · pid ${escapeHtml(p.pid || '-')}</small></td>
+        <td>${escapeHtml(p.chw_addr || '-')} ต.${escapeHtml(p.tambon || '-')} อ.${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '-')}</td>
+        <td>${r.daysOverdue === null ? '-' : escapeHtml(r.daysOverdue.toLocaleString('th-TH'))}</td>
+        <td>${f ? `${escapeHtml(FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '')}<br><small>${escapeHtml((f.lastAt || '').slice(0, 10))}</small>` : '-'}</td>
+        <td>${f && f.nextDate ? escapeHtml(f.nextDate) : '-'}${due === 'overdue' ? '<br><b>เกินนัด</b>' : ''}</td>
+        <td class="blank"></td>
+      </tr>`;
+    }).join('');
+    return `<section>
+      <h2>${escapeHtml(hos)} <small>(${list.length.toLocaleString('th-TH')} คน)</small></h2>
+      <table><thead><tr><th>#</th><th>ความสำคัญ</th><th>ชื่อ-สกุล</th><th>ที่อยู่</th><th>ค้าง (วัน)</th><th>ติดตามล่าสุด</th><th>นัดถัดไป</th><th>ผลการติดตาม / วันที่ / ผู้ติดตาม</th></tr></thead>
+      <tbody>${body}</tbody></table>
+      <p class="sign">ผู้รับผิดชอบ ........................................ วันที่ส่งคืน ....................</p>
+    </section>`;
+  }).join('');
+  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบงานติดตามผู้ป่วย SMI-V ${escapeHtml(todayYmd)}</title>
+<style>
+body{font-family:'Kanit','Segoe UI',Tahoma,sans-serif;margin:16px;color:#111}
+header{border-bottom:3px solid #7c3aed;margin-bottom:8px}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:16px;color:#5b21b6;margin:12px 0 6px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid #999;padding:4px 6px;vertical-align:top;text-align:left}
+th{background:#f1e9ff}
+td.blank{min-width:180px}
+small{color:#555}
+.warn{color:#b42318;font-size:12px}
+.sign{margin-top:14px;font-size:13px}
+section{break-after:page;page-break-after:always}
+section:last-child{break-after:auto;page-break-after:auto}
+@media print{.noprint{display:none}}
+</style></head><body>
+<header><h1>ใบงานติดตามผู้ป่วย SMI-V — พิมพ์วันที่ ${escapeHtml(todayYmd)}</h1>
+<p class="warn">เอกสารมีข้อมูลส่วนบุคคล (PDPA) — ใช้ติดตามผู้ป่วยเท่านั้น ห้ามส่งต่อ/ถ่ายรูปเผยแพร่ ทำลายเมื่อใช้งานเสร็จ</p>
+<button class="noprint" onclick="print()">🖨️ พิมพ์</button></header>
+${sections || '<p>ไม่พบผู้ป่วยที่ต้องติดตามในเงื่อนไขปัจจุบัน</p>'}
+</body></html>`;
+}
+
+function printWorklist() {
+  if (!piiLoaded) { alert('ต้องเข้าสู่ระบบก่อน'); return; }
+  const w = window.open('', '_blank');
+  if (!w) { alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กรุณาอนุญาต pop-up สำหรับเว็บนี้'); return; }
+  w.document.open();
+  w.document.write(buildWorklistHtml(problemPatientsAll, todayIso()));
+  w.document.close();
+}
+
 // ---------- Publish (ดาวน์โหลดสำเนาสาธารณะไว้ทำเอง — เผื่อ Worker ล่ม; ห้ามมีข้อมูลส่วนบุคคลในไฟล์ที่ดาวน์โหลด) ----------
 function buildPayload() {
   return { patients: state.patients, population: state.population, settings: state.settings, publishedAt: new Date().toISOString() };
@@ -1736,7 +1802,7 @@ function renderAuthState() {
     const el = $(sel);
     if (el) el.disabled = adminOnly;
   });
-  ['#exportIssuesBtn', '#exportIssuesBtn2'].forEach(sel => {
+  ['#exportIssuesBtn', '#exportIssuesBtn2', '#printWorklistBtn'].forEach(sel => {
     const el = $(sel);
     if (el) { el.disabled = !piiLoaded; el.title = piiLoaded ? '' : 'ต้องเข้าสู่ระบบก่อน'; }
   });
@@ -2285,6 +2351,7 @@ async function init() {
   $('#exportReportChwBtn').addEventListener('click', () => exportReportXlsx('chw_addr'));
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#exportIssuesBtn2').addEventListener('click', exportIssuesXlsx);
+  $('#printWorklistBtn').addEventListener('click', printWorklist);
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#copyPopPrevYearBtn').addEventListener('click', copyPopulationFromPreviousYear);
   $('#publishBtn').addEventListener('click', publishData);
