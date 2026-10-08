@@ -277,3 +277,19 @@ test('addressLabel: ในจังหวัดแสดง ต./อ., นอก
   assert.equal(sandbox.addressLabel({ chw_addr: '49', ampur: '01', tambon: '01' }), 'ต.01 อ.เมืองมุกดาหาร');
   assert.equal(sandbox.addressLabel({ chw_addr: '34', ampur: '01', tambon: '01' }), 'ต.01 อ.01 จ.อุบลราชธานี');
 });
+
+test('buildProblemPatients: เลือกขอบเขตนอกจังหวัด → เหลือเฉพาะผู้ป่วยนอกจังหวัด', () => {
+  sandbox.window.smivEngine.state.patients = [
+    mkPatient({ pid: 'in', chw_addr: '49', ampur: '01', fiscal_year_be: 2569, follow_last: null }),
+    mkPatient({ pid: 'out', chw_addr: '34', ampur: '01', fiscal_year_be: 2569, follow_last: null }),
+  ];
+  assert.deepEqual([...sandbox.buildProblemPatients(2569, 'ampur', '', 'out').map(r => r.p.pid)], ['out']);
+  assert.deepEqual([...sandbox.buildProblemPatients(2569, 'ampur', '', 'in').map(r => r.p.pid)], ['in']);
+  assert.equal(sandbox.buildProblemPatients(2569, 'ampur', '', 'all').length, 2);
+});
+
+test('followupCoverage: โหมดนอกจังหวัดแยกแถวตามอำเภอ+จังหวัด', () => {
+  const rows = [{ p: { hoscode: 'H', pid: '1', chw_addr: '34', ampur: '01', tambon: '01' } }];
+  const cov = sandbox.followupCoverage(rows, {}, '2026-10-08', 90, true);
+  assert.deepEqual([...Object.keys(cov)], ['อ.01 จ.อุบลราชธานี']);
+});

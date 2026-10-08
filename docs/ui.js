@@ -1214,12 +1214,15 @@ function daysSince(dateStr) {
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
-function buildProblemPatients(fy, level, areaFilter) {
+function buildProblemPatients(fy, level, areaFilter, scope = currentScope()) {
   const maxAge = state.settings.max_age_included;
   const rows = [];
   for (const p of state.patients) {
     if (p.fiscal_year_be > fy) continue;
     if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) continue;
+    // ขอบเขตภูมิลำเนา (การ์ด "ในจังหวัด/นอกจังหวัด") ต้องกรองรายชื่อด้วย ไม่ใช่แค่ตัวชี้วัด
+    if (scope === 'in' && p.chw_addr !== '49') continue;
+    if (scope === 'out' && p.chw_addr === '49') continue;
     if (areaFilter) {
       const key = level === 'hoscode' ? p.hoscode : (level === 'chw_addr' ? p.chw_addr : p.ampur);
       if (String(key) !== areaFilter) continue;
@@ -1293,12 +1296,14 @@ const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2
 
 // ความครอบคลุมการติดตามรายอำเภอ: ในรายชื่อที่ต้องติดตาม มีกี่คนที่ได้รับการติดตามใน N วันล่าสุด / เกินนัดกี่คน
 const FOLLOWUP_COVERAGE_DAYS = 90;
-function followupCoverage(rows, map, todayYmd, days = FOLLOWUP_COVERAGE_DAYS) {
+function followupCoverage(rows, map, todayYmd, days = FOLLOWUP_COVERAGE_DAYS, detailOutside = false) {
   const since = new Date(Date.parse(`${todayYmd}T00:00:00Z`) - days * 86400000).toISOString();
   const byAmpur = {};
   for (const { p } of rows) {
     // รหัสอำเภอซ้ำกันได้ข้ามจังหวัด → นอกจังหวัดรวมเป็นแถวเดียว ไม่ปนกับอำเภอของมุกดาหาร
-    const key = p.chw_addr && p.chw_addr !== '49' ? 'นอกจังหวัด' : (p.ampur || '-');
+    const outside = p.chw_addr && p.chw_addr !== '49';
+    const key = !outside ? (p.ampur || '-')
+      : detailOutside ? addressLabel(p).replace(/^ต\.\S+ /, '') : 'นอกจังหวัด';
     const a = (byAmpur[key] ||= { total: 0, followed: 0, overdue: 0 });
     const f = map[`${p.hoscode}-${p.pid}`];
     const followed = !!(f && f.lastAt && f.lastAt >= since);
@@ -1313,14 +1318,14 @@ function renderFollowupCoverage() {
   const box = $('#followupCoverageBox');
   if (!box) return;
   if (!piiLoaded || !problemPatientsAll.length) { box.innerHTML = ''; return; }
-  const cov = followupCoverage(problemPatientsAll, followupMap, todayIso());
+  const cov = followupCoverage(problemPatientsAll, followupMap, todayIso(), FOLLOWUP_COVERAGE_DAYS, currentScope() === 'out');
   const entries = Object.entries(cov).sort((a, b) => b[1].total - a[1].total);
   const sum = entries.reduce((s, [, v]) => ({ total: s.total + v.total, followed: s.followed + v.followed, overdue: s.overdue + v.overdue }), { total: 0, followed: 0, overdue: 0 });
   const pctTxt = (n, d) => d ? `${(n * 100 / d).toFixed(1)}%` : '-';
   box.innerHTML = `<details class="followup-coverage" open>
     <summary><strong>ความครอบคลุมการติดตาม ${FOLLOWUP_COVERAGE_DAYS} วันล่าสุด:</strong> ${sum.followed.toLocaleString('th-TH')} / ${sum.total.toLocaleString('th-TH')} คน (${pctTxt(sum.followed, sum.total)})${sum.overdue ? ` · <span class="followup-badge overdue">เกินนัด ${sum.overdue.toLocaleString('th-TH')} คน</span>` : ''}</summary>
     <div class="table-scroll"><table class="report-table">
-      <thead><tr><th>อำเภอ</th><th>ต้องติดตาม</th><th>ติดตามแล้ว</th><th>ร้อยละ</th><th>เกินนัด</th></tr></thead>
+      <thead><tr><th>${currentScope() === 'out' ? 'อำเภอ / จังหวัด' : 'อำเภอ'}</th><th>ต้องติดตาม</th><th>ติดตามแล้ว</th><th>ร้อยละ</th><th>เกินนัด</th></tr></thead>
       <tbody>${entries.map(([a, v]) => `<tr>
         <td>${escapeHtml(KNOWN_AMPUR[a] || a)}</td><td>${v.total.toLocaleString('th-TH')}</td><td>${v.followed.toLocaleString('th-TH')}</td>
         <td>${pctTxt(v.followed, v.total)}</td><td>${v.overdue ? `<span class="followup-badge overdue">${v.overdue.toLocaleString('th-TH')}</span>` : '0'}</td>
