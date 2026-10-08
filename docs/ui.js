@@ -1474,6 +1474,45 @@ function exportIssuesXlsx() {
   XLSX.writeFile(wb, `smiv_problem_patients_${level}_${fy}.xlsx`);
 }
 
+// ---------- ผู้ป่วยนอกจังหวัด แยกชีตตามจังหวัดปลายทาง (ใช้ประสานส่งต่อ — เฉพาะผู้ที่ล็อกอิน) ----------
+function buildOutProvinceSheets(fy) {
+  const maxAge = state.settings.max_age_included;
+  const problems = new Map(buildProblemPatients(fy, 'ampur', '', 'out').map(r => [followupKeyOf(r.p), r]));
+  const byProv = new Map();
+  for (const p of state.patients) {
+    if (p.fiscal_year_be > fy || !p.chw_addr || p.chw_addr === '49') continue;
+    if (p.age_at_fy_end !== null && p.age_at_fy_end > maxAge) continue;
+    const prov = provinceName(p.chw_addr);
+    if (!byProv.has(prov)) byProv.set(prov, []);
+    byProv.get(prov).push(p);
+  }
+  const header = ['ชื่อ', 'สกุล', 'cid', 'pid', 'หน่วยบริการที่รักษา', 'ที่อยู่', 'วันรับบริการครั้งแรก', 'ติดตามล่าสุด (HDC)', 'ก่อความรุนแรงซ้ำ', 'ความสำคัญ', 'ปัญหาที่พบ', 'สถานะติดตามล่าสุด', 'วันนัดถัดไป'];
+  const rowOf = p => {
+    const r = problems.get(followupKeyOf(p));
+    const f = followupMap[followupKeyOf(p)];
+    return [p.name || '', p.lname || '', p.cid || '', p.pid || '', p.hosname || p.hoscode || '', addressLabel(p),
+      p.first_date_serv || '', p.follow_last || '', p.has_repeat_violence ? 'ใช่' : '', r ? r.priority : '', r ? r.issues.join('; ') : '',
+      f ? (FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '') : '', f && f.nextDate ? f.nextDate : ''];
+  };
+  const provs = [...byProv.entries()].sort((a, b) => b[1].length - a[1].length);
+  const summary = [['จังหวัด', 'จำนวนผู้ป่วย', 'ก่อความรุนแรงซ้ำ'], ...provs.map(([prov, ps]) => [prov, ps.length, ps.filter(p => p.has_repeat_violence).length])];
+  const sheets = provs.map(([prov, ps]) => ({
+    name: prov.replace(/[\\/?*[\]:]/g, '').slice(0, 31), // อักขระต้องห้ามของชื่อชีต Excel + ยาวไม่เกิน 31
+    aoa: [header, ...ps.slice().sort((a, b) => addressLabel(a).localeCompare(addressLabel(b), 'th')).map(rowOf)],
+  }));
+  return { summary, sheets };
+}
+
+function exportOutProvinceXlsx() {
+  if (!piiLoaded) { alert('ต้องเข้าสู่ระบบก่อน'); return; }
+  const fy = currentFy();
+  const { summary, sheets } = buildOutProvinceSheets(fy);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary.length > 1 ? summary : [['ไม่พบผู้ป่วยนอกจังหวัดในเงื่อนไขปัจจุบัน']]), 'สรุป');
+  for (const sh of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sh.aoa), sh.name);
+  XLSX.writeFile(wb, `smiv_out_of_province_${fy}.xlsx`);
+}
+
 // ---------- ใบงานติดตามสำหรับพิมพ์: 1 หน้าต่อ 1 หน่วยบริการ (เฉพาะผู้ที่ล็อกอิน) ----------
 function buildWorklistHtml(rows, todayYmd) {
   const byHos = new Map();
@@ -1842,7 +1881,7 @@ function renderAuthState() {
     const el = $(sel);
     if (el) el.disabled = adminOnly;
   });
-  ['#exportIssuesBtn', '#exportIssuesBtn2', '#printWorklistBtn'].forEach(sel => {
+  ['#exportIssuesBtn', '#exportIssuesBtn2', '#printWorklistBtn', '#exportOutProvinceBtn'].forEach(sel => {
     const el = $(sel);
     if (el) { el.disabled = !piiLoaded; el.title = piiLoaded ? '' : 'ต้องเข้าสู่ระบบก่อน'; }
   });
@@ -2393,6 +2432,7 @@ async function init() {
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#exportIssuesBtn2').addEventListener('click', exportIssuesXlsx);
   $('#printWorklistBtn').addEventListener('click', printWorklist);
+  $('#exportOutProvinceBtn').addEventListener('click', exportOutProvinceXlsx);
   $('#navDue').addEventListener('click', () => {
     ppOverdueOnly = true; ppVisibleCount = 20;
     showTab('dashboard');

@@ -293,3 +293,17 @@ test('followupCoverage: โหมดนอกจังหวัดแยกแ�
   const cov = sandbox.followupCoverage(rows, {}, '2026-10-08', 90, true);
   assert.deepEqual([...Object.keys(cov)], ['อ.01 จ.อุบลราชธานี']);
 });
+
+test('buildOutProvinceSheets: 1 ชีตต่อจังหวัด, ไม่รวมคนในจังหวัด, header ตรงทุกแถว', () => {
+  sandbox.window.smivEngine.state.patients = [
+    mkPatient({ pid: 'a', chw_addr: '49', fiscal_year_be: 2569 }),
+    mkPatient({ pid: 'b', chw_addr: '34', fiscal_year_be: 2569, has_repeat_violence: true }),
+    mkPatient({ pid: 'c', chw_addr: '34', fiscal_year_be: 2569 }),
+    mkPatient({ pid: 'd', chw_addr: '35', fiscal_year_be: 2569 }),
+  ];
+  const { summary, sheets } = sandbox.buildOutProvinceSheets(2569);
+  assert.deepEqual([...sheets.map(s => s.name)], ['อุบลราชธานี', 'ยโสธร']);
+  assert.deepEqual([...summary[1]], ['อุบลราชธานี', 2, 1]);
+  for (const sh of sheets) for (const row of sh.aoa) assert.equal(row.length, sh.aoa[0].length);
+  assert.ok(!sheets.some(sh => sh.aoa.some(r => r[3] === 'a')), 'คนในจังหวัดต้องไม่อยู่ในไฟล์');
+});
