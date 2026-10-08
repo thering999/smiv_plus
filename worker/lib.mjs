@@ -21,6 +21,7 @@ export const LOGIN_MAX_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_SECONDS = 15 * 60;
 
 export const PII_CURRENT_KEY = 'pii/current.json';
+export const HOME_PROVINCE = '49'; // มุกดาหาร — ใช้คู่กับรหัสอำเภอในการจำกัดสิทธิ์ viewer
 export const PII_HISTORY_PREFIX = 'pii/history/';
 export const PII_HISTORY_INDEX_KEY = 'pii/history/index.json';
 export const PII_HISTORY_KEEP = 20;
@@ -190,7 +191,8 @@ export function scopePatientsForUser(patients, user) {
   if (!user) return [];
   if (user.role === 'admin') return list;
   if (!user.ampur) return []; // viewer ที่ไม่ได้กำหนดอำเภอ = ไม่เห็นข้อมูลจริง (fail closed)
-  return list.filter(p => p.ampur === user.ampur);
+  // รหัสอำเภอซ้ำข้ามจังหวัด (เช่น 01 ของอุบลฯ) → viewer เห็นเฉพาะผู้ป่วยภูมิลำเนามุกดาหารในอำเภอตัวเอง
+  return list.filter(p => p.ampur === user.ampur && (!p.chw_addr || String(p.chw_addr) === HOME_PROVINCE));
 }
 
 export function sanitizeUser(user) {
@@ -780,7 +782,9 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     const patients = full && Array.isArray(full.patients) ? full.patients : [];
     const target = patients.find(p => String(p.hoscode) === hoscode && String(p.pid) === pid);
     if (!target) return json(request, env, { error: 'ไม่พบผู้ป่วยรายนี้ในข้อมูลปัจจุบัน' }, 404);
-    const ampur = String(target.ampur || '');
+    // ถังเก็บตามพื้นที่: ในจังหวัด = รหัสอำเภอ, นอกจังหวัด = out<รหัสจังหวัด> (กันปนกับอำเภอรหัสเดียวกันของมุกดาหาร)
+    const chw = String(target.chw_addr || '');
+    const ampur = chw && chw !== HOME_PROVINCE ? `out${chw}` : String(target.ampur || '');
     if (!ID_PART.test(ampur)) return json(request, env, { error: 'ข้อมูลอำเภอของผู้ป่วยไม่ถูกต้อง' }, 422);
     if (scopePatientsForUser([target], auth.user).length === 0) {
       return json(request, env, { error: 'บัญชีนี้ไม่มีสิทธิ์บันทึกการติดตามผู้ป่วยนอกอำเภอที่รับผิดชอบ' }, 403);

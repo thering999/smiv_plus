@@ -260,3 +260,15 @@ test('buildWorklistHtml: 1 section ต่อหน่วยบริการ, �
   assert.ok(html.indexOf('สูงสุด') < html.indexOf('&lt;img'), 'ความสำคัญสูงต้องมาก่อน');
   assert.ok(html.includes('PDPA'));
 });
+
+test('followupCoverage: อำเภอรหัสเดียวกันแต่ต่างจังหวัด ไม่ถูกรวมเป็นอำเภอของมุกดาหาร', () => {
+  const rows = [
+    { p: { hoscode: 'H', pid: '1', chw_addr: '49', ampur: '01' } },
+    { p: { hoscode: 'H', pid: '2', chw_addr: '34', ampur: '01' } },
+    { p: { hoscode: 'H', pid: '3', chw_addr: '33', ampur: '09' } },
+  ];
+  const cov = sandbox.followupCoverage(rows, {}, '2026-10-08');
+  assert.equal(cov['01'].total, 1);
+  assert.equal(cov['นอกจังหวัด'].total, 2);
+  assert.equal(cov['09'], undefined);
+});

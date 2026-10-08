@@ -621,3 +621,22 @@ test('validatePublishPayload: ไฟล์ HDC ที่ปิดบังมา
   const hdc = [patient({ cid: '123456789****', name: 'สมเ***', lname: 'บุปผ*****' }), patient({ pid: '2', cid: '987654321****', name: 'วิ***', lname: 'รัตนะ*****' })];
   assert.equal(validatePublishPayload({ patients: hdc, publishedAt: '2026-10-08T00:00:00Z' }).ok, true);
 });
+
+test('scopePatientsForUser: viewer อำเภอ 01 ไม่เห็นผู้ป่วยอำเภอ 01 ของจังหวัดอื่น', () => {
+  const list = [patient({ pid: '1', chw_addr: '49', ampur: '01' }), patient({ pid: '2', chw_addr: '34', ampur: '01' })];
+  assert.deepEqual(scopePatientsForUser(list, { role: 'viewer', ampur: '01' }).map(p => p.pid), ['1']);
+  assert.equal(scopePatientsForUser(list, { role: 'admin', ampur: null }).length, 2);
+});
+
+test('followup: ผู้ป่วยนอกจังหวัดเก็บแยกถัง ไม่โผล่ในรายการของ viewer อำเภอรหัสเดียวกัน', async () => {
+  const env = await envWithPasswords();
+  const handler = createWorkerHandler();
+  await env._kv.put(PII_CURRENT_KEY, JSON.stringify({ patients: [patient({ pid: '7', chw_addr: '34', ampur: '01' })] }));
+  const admin = (await loginAs(handler, env, 'admin', 'admin-pass-1234')).body.token;
+  const viewer = (await loginAs(handler, env, 'muk01', 'muk01-pass-1234')).body.token;
+  assert.equal((await handler.fetch(req('/followups', { token: admin, body: { hoscode: '10712', pid: '7', status: 'phone' } }), env)).status, 200);
+  assert.ok(env._kv._map.has('followup/out34/10712-7'));
+  assert.equal((await handler.fetch(req('/followups', { token: viewer, body: { hoscode: '10712', pid: '7', status: 'phone' } }), env)).status, 403);
+  const list = await (await handler.fetch(req('/followups', { method: 'GET', token: viewer }), env)).json();
+  assert.equal(list.items.length, 0);
+});

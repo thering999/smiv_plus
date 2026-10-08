@@ -6,7 +6,13 @@ const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFi
   FINDING_CATEGORY_LABELS, REPORT_LEVELS, KNOWN_AMPUR, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
-  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook } = window.smivEngine;
+  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook, provinceName } = window.smivEngine;
+
+// ชื่ออำเภอของผู้ป่วย: รหัสอำเภอซ้ำข้ามจังหวัดได้ จึงแปลเป็นชื่ออำเภอมุกดาหารเฉพาะคนที่ภูมิลำเนาอยู่ในจังหวัด
+function ampurLabel(p) {
+  if (p.chw_addr && p.chw_addr !== '49') return `${provinceName(p.chw_addr)} อ.${p.ampur || '-'}`;
+  return KNOWN_AMPUR[p.ampur] || p.ampur || '-';
+}
 
 // ลดพื้นที่ว่างของกราฟทุกตัว (ค่า default ของ Chart.js สูงเกินไปเมื่อมีข้อมูลน้อยจุด เช่น trend ปีเดียว)
 if (typeof Chart !== 'undefined') Chart.defaults.aspectRatio = 2.2;
@@ -1278,7 +1284,9 @@ function followupCoverage(rows, map, todayYmd, days = FOLLOWUP_COVERAGE_DAYS) {
   const since = new Date(Date.parse(`${todayYmd}T00:00:00Z`) - days * 86400000).toISOString();
   const byAmpur = {};
   for (const { p } of rows) {
-    const a = (byAmpur[p.ampur || '-'] ||= { total: 0, followed: 0, overdue: 0 });
+    // รหัสอำเภอซ้ำกันได้ข้ามจังหวัด → นอกจังหวัดรวมเป็นแถวเดียว ไม่ปนกับอำเภอของมุกดาหาร
+    const key = p.chw_addr && p.chw_addr !== '49' ? 'นอกจังหวัด' : (p.ampur || '-');
+    const a = (byAmpur[key] ||= { total: 0, followed: 0, overdue: 0 });
     const f = map[`${p.hoscode}-${p.pid}`];
     const followed = !!(f && f.lastAt && f.lastAt >= since);
     a.total++;
@@ -1354,7 +1362,7 @@ function renderProblemPatientsTable() {
         <button type="button" class="btn btn-outline" data-copy-cid="${escapeHtml(p.cid)}" style="padding:2px 8px;font-size:.8em;margin-left:4px" title="คัดลอกเลขบัตรประชาชน">⧉</button>` : '<span class="note">ไม่มีในข้อมูล</span>'}
         <div class="note" style="margin:2px 0 0">pid: ${escapeHtml(p.pid || '-')}</div></td>` : '<td class="note">🔒 ปิดบัง</td>'}
       <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
-      <td>${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
+      <td>${escapeHtml(ampurLabel(p))}/${escapeHtml(p.tambon || '-')}</td>
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
       <td>${issues.join(', ')}</td>
       ${piiLoaded ? `<td>${followupCellHtml(p)}</td>` : ''}
@@ -1453,7 +1461,7 @@ function buildWorklistHtml(rows, todayYmd) {
         <td>${i + 1}</td>
         <td>${r.priority === 'สูง' ? '🔴' : r.priority === 'กลาง' ? '🟠' : '⚪'} ${escapeHtml(r.priority)}</td>
         <td>${escapeHtml(`${p.name || ''} ${p.lname || ''}`)}<br><small>cid ${escapeHtml(p.cid || '-')} · pid ${escapeHtml(p.pid || '-')}</small></td>
-        <td>${escapeHtml(p.chw_addr || '-')} ต.${escapeHtml(p.tambon || '-')} อ.${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '-')}</td>
+        <td>ต.${escapeHtml(p.tambon || '-')} ${escapeHtml(ampurLabel(p))}</td>
         <td>${r.daysOverdue === null ? '-' : escapeHtml(r.daysOverdue.toLocaleString('th-TH'))}</td>
         <td>${f ? `${escapeHtml(FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '')}<br><small>${escapeHtml((f.lastAt || '').slice(0, 10))}</small>` : '-'}</td>
         <td>${f && f.nextDate ? escapeHtml(f.nextDate) : '-'}${due === 'overdue' ? '<br><b>เกินนัด</b>' : ''}</td>

@@ -614,7 +614,7 @@ window.smivEngine = {
   TARGET_ACCESS_RATE, THRESHOLD_REPEAT_VIOLENCE, THRESHOLD_ZERO_FOLLOWUP, pct,
   qualityLevelAccess, scoreQuantitative, SCORE_SCALE_6M, SCORE_SCALE_10M, buildYearlyTrend, buildYearlyTrendByAmpur, buildAccessRateTrend,
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
-  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook,
+  parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook, provinceName,
 };
 
 })();
