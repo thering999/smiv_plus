@@ -171,6 +171,11 @@ export function validatePublishPayload(payload, { maxPatients = MAX_PATIENTS, ma
     if (!p.hoscode || !p.pid) return { ok: false, error: 'ผู้ป่วยทุกคนต้องมี hoscode และ pid' };
     if (!Number.isFinite(Number(p.fiscal_year_be))) return { ok: false, error: `ผู้ป่วย ${p.pid}: fiscal_year_be ไม่ใช่ตัวเลข` };
   }
+  // กันเผลอเผยแพร่ข้อมูลที่ปิดบังแล้ว (เช่นโหลดจาก data.json สาธารณะ) ทับข้อมูลจริงในพื้นที่ส่วนตัว
+  const masked = payload.patients.filter(p => /\*{3}$/.test(String(p.name || '')) && !/^\d{13}$/.test(String(p.cid || ''))).length;
+  if (payload.patients.length && masked * 2 > payload.patients.length) {
+    return { ok: false, error: 'ข้อมูลนี้เป็นชุดที่ปิดบังชื่อ/เลขบัตรแล้ว (จาก data.json สาธารณะ) — กรุณาอัปโหลดไฟล์ Excel ต้นฉบับก่อนเผยแพร่' };
+  }
   return { ok: true, size, count: payload.patients.length };
 }
 

@@ -608,3 +608,10 @@ test('toPublicPatient: วันเกิดสาธารณะเหลือ
   assert.equal(out.birth, '1988');
   assert.equal('cid' in out, false);
 });
+
+test('validatePublishPayload: ปฏิเสธข้อมูลที่ปิดบังแล้ว (กันเผยแพร่ data.json สาธารณะทับข้อมูลจริง)', () => {
+  const at = '2026-10-08T00:00:00Z';
+  const masked = toPublicPayload({ patients: [patient(), patient({ pid: '2' })] });
+  assert.equal(validatePublishPayload({ ...masked, publishedAt: at }).ok, false);
+  assert.equal(validatePublishPayload({ patients: [patient(), patient({ pid: '2' })], publishedAt: at }).ok, true);
+});

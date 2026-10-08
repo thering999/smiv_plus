@@ -1490,6 +1490,7 @@ const AUTH_STORE_KEY = 'smivplus_auth_v2';
 let auth = null;        // {token, username, displayName, role, ampur, expiresAt}
 let piiLoaded = false;  // true = state.patients ที่โหลดอยู่เป็นข้อมูลจริง (มี cid เต็ม) จาก Worker
 let realDataNotice = '';
+let realDataError = ''; // เหตุผลที่โหลดข้อมูลจริงไม่ได้ (เช่น ยังไม่เคยเผยแพร่) — แสดงแทน "กำลังโหลด..." ที่ค้าง
 
 function isAdminUser() { return !!auth && auth.role === 'admin'; }
 function isLoggedIn() { return !!auth && !!auth.token; }
@@ -1548,7 +1549,15 @@ async function loadRealPatients() {
   const res = await fetch(`${PUBLISH_WORKER_URL}/patient-data`, { method: 'POST', headers: authHeaders(), body: '{}' });
   const result = await res.json().catch(() => ({}));
   if (res.status === 401) { clearAuth(); throw new Error(result.error || 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
-  if (!res.ok) throw new Error(result.error || `ดึงข้อมูลไม่สำเร็จ (${res.status})`);
+  realDataError = '';
+  if (res.status === 404) {
+    realDataError = isAdminUser()
+      ? 'ยังไม่มีข้อมูลผู้ป่วยตัวจริงในระบบ — เลือกไฟล์ Excel ต้นฉบับในส่วน "นำเข้าข้อมูล Excel" แล้วกด 🚀 เผยแพร่ข้อมูล 1 ครั้ง'
+      : 'ยังไม่มีข้อมูลผู้ป่วยตัวจริงในระบบ — รอผู้ดูแลระบบเผยแพร่ข้อมูลก่อน';
+  } else if (!res.ok) {
+    realDataError = result.error || `ดึงข้อมูลไม่สำเร็จ (${res.status})`;
+  }
+  if (realDataError) { renderAuthState(); throw new Error(realDataError); }
   return result;
 }
 
@@ -1711,7 +1720,7 @@ function renderAuthState() {
   if (bannerText && isLoggedIn()) {
     bannerText.textContent = piiLoaded
       ? `🔓 กำลังแสดงข้อมูลผู้ป่วยตัวจริง (รวมเลขบัตรประชาชน) — ${realDataNotice} · ห้ามคัดลอก/ส่งต่อออกนอกหน่วยงาน`
-      : '🔓 เข้าสู่ระบบแล้ว — กำลังโหลดข้อมูลผู้ป่วยตัวจริง...';
+      : realDataError ? `⚠️ ${realDataError}` : '🔓 เข้าสู่ระบบแล้ว — กำลังโหลดข้อมูลผู้ป่วยตัวจริง...';
   }
   // ปุ่มที่ต้องเป็น admin จะกดไม่ได้ถ้าไม่ได้ล็อกอินเป็น admin (และอธิบายให้ผู้ใช้เข้าใจ)
   const adminOnly = !isAdminUser();
