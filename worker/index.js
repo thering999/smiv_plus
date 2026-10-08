@@ -11,6 +11,9 @@
  *   POST / (publish)     → รับข้อมูลเต็มจาก admin → เก็บข้อมูลเต็มไว้ในพื้นที่ส่วนตัว (R2/KV)
  *                          แล้วเขียน "สำเนาที่ปิดบังข้อมูลส่วนบุคคลแล้ว" ขึ้น GitHub Pages เท่านั้น
  *   POST / (delete_history | full_history | restore_full_history) → จัดการประวัติ (admin)
+ *   GET/POST /followups  → บันทึก/อ่านการติดตามผู้ป่วยรายคน (จำกัดอำเภอ)
+ *   GET  /audit          → บันทึกการเข้าถึงข้อมูล (admin)
+ *   POST /notify-overdue → แจ้งผู้ป่วยเกินนัดทาง LINE (admin, dry-run เป็นค่าเริ่มต้น) + Cron ทุกเช้า
  *   GET  /health         → สถานะการตั้งค่า (ไม่มีความลับ) ใช้เฝ้าระวังระบบ
  */
 import { createWorkerHandler } from './lib.mjs';

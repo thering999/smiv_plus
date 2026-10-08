@@ -124,3 +124,15 @@ git push --force-with-lease origin main
 | ข้อมูลในหน้าจอยังเป็นชื่อที่ถูกปิดบัง | ยังไม่ได้ล็อกอิน หรือกด "🔄 ดึงข้อมูลจริงล่าสุด" |
 | ล็อกอินไม่ผ่านและขึ้นให้รอ 15 นาที | โดน throttle (กันเดารหัส) — รอ หรือใช้บัญชี/IP อื่น |
 
+
+## แจ้งผู้ป่วยเกินนัดทาง LINE (ไม่บังคับ)
+
+Cron ใน `wrangler.toml` รันทุกวัน 08:00 น. นับผู้ป่วยที่เลยวันนัดติดตาม (ยังไม่ปิดเคส) แยกตามอำเภอ แล้ว push ผ่าน LINE Messaging API
+ข้อความมีเฉพาะ **จำนวน** ต่อหน่วยบริการ ไม่มีชื่อ/เลขบัตร/pid
+
+1. สร้าง Messaging API channel → ออก channel access token → `npx wrangler secret put LINE_CHANNEL_TOKEN`
+2. เชิญบอทเข้ากลุ่ม LINE ของแต่ละอำเภอ แล้วเก็บ groupId
+3. `npx wrangler secret put LINE_TARGETS` ค่าเช่น `{"01":"Cxxxx","02":"Cyyyy","*":"Czzzz"}` (`*` = สรุปทั้งจังหวัด)
+4. ทดสอบก่อนส่งจริง: admin เรียก `POST /notify-overdue` body `{}` = dry-run ดูข้อความ, `{"dryRun":false}` = ส่งจริง
+
+ไม่ได้ตั้ง token/targets → cron ไม่ส่งอะไรออก

@@ -367,6 +367,42 @@ export function summarizeFollowup(record) {
   };
 }
 
+// ---------- แจ้งเตือนผู้ป่วยเกินนัดทาง LINE (Cron) ----------
+// LINE เป็นบริการภายนอก → ข้อความมีแค่ "จำนวน" ต่ออำเภอ/หน่วยบริการ ห้ามมีชื่อ/cid/pid
+// env.LINE_TARGETS = JSON {"01": "<groupId อำเภอ 01>", "*": "<userId/groupId ผู้ดูแลจังหวัด>"}
+export function bangkokDate(ms) { return new Date(ms + 7 * 3600000).toISOString().slice(0, 10); }
+
+export function collectOverdue(records, patients, todayIso) {
+  const hosname = new Map((patients || []).map(p => [`${p.hoscode}`, p.hosname || p.hoscode]));
+  const current = new Set((patients || []).map(p => `${p.hoscode}-${p.pid}`));
+  const byAmpur = {};
+  for (const r of records) {
+    if (!r) continue;
+    const s = summarizeFollowup(r);
+    if (!s.nextDate || s.lastStatus === 'closed' || s.nextDate >= todayIso) continue;
+    if (!current.has(`${s.hoscode}-${s.pid}`)) continue; // ไม่อยู่ในข้อมูลปัจจุบันแล้ว
+    const a = (byAmpur[s.ampur] ||= { total: 0, byHos: {} });
+    a.total++;
+    const h = hosname.get(`${s.hoscode}`) || s.hoscode;
+    a.byHos[h] = (a.byHos[h] || 0) + 1;
+  }
+  return byAmpur;
+}
+
+export function overdueMessage(label, group, todayIso, siteUrl) {
+  const lines = Object.entries(group.byHos).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([h, n]) => `• ${h}: ${n} คน`);
+  return [`SMI-V Plus ${todayIso}`, `${label}: ผู้ป่วยเกินวันนัดติดตาม ${group.total} คน`, ...lines,
+    `ดูรายชื่อ (ต้องเข้าสู่ระบบ): ${siteUrl}`].join('\n').slice(0, 4900);
+}
+
+export function parseLineTargets(raw) {
+  if (!raw) return {};
+  try {
+    const t = JSON.parse(raw);
+    return t && typeof t === 'object' && !Array.isArray(t) ? t : {};
+  } catch (e) { return {}; }
+}
+
 function clientIp(request) {
   return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown-ip';
 }
@@ -747,6 +783,55 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     return json(request, env, { ok: true, entry, summary: summarizeFollowup(record) });
   }
 
+  async function runOverdueNotify(env, { dryRun = false } = {}) {
+    const storage = storageFor(env);
+    if (!storage) return { ok: false, error: STORAGE_MISSING_MESSAGE };
+    const targets = parseLineTargets(env.LINE_TARGETS);
+    const today = bangkokDate(nowMs());
+    const full = await storeGet(storage, PII_CURRENT_KEY);
+    const keys = await storeList(storage, FOLLOWUP_PREFIX);
+    const records = await Promise.all(keys.map(k => storeGet(storage, k)));
+    const byAmpur = collectOverdue(records, full && full.patients, today);
+    const siteUrl = env.SITE_URL || 'https://thering999.github.io/smiv_plus/';
+
+    const messages = [];
+    for (const [ampur, group] of Object.entries(byAmpur)) {
+      if (targets[ampur]) messages.push({ to: targets[ampur], text: overdueMessage(`อำเภอ ${ampur}`, group, today, siteUrl) });
+    }
+    if (targets['*'] && Object.keys(byAmpur).length) {
+      const total = Object.values(byAmpur).reduce((n, g) => n + g.total, 0);
+      const byHos = Object.fromEntries(Object.entries(byAmpur).map(([a, g]) => [`อำเภอ ${a}`, g.total]));
+      messages.push({ to: targets['*'], text: overdueMessage('ทั้งจังหวัด', { total, byHos }, today, siteUrl) });
+    }
+
+    const summary = Object.fromEntries(Object.entries(byAmpur).map(([a, g]) => [a, g.total]));
+    if (dryRun || !env.LINE_CHANNEL_TOKEN) return { ok: true, dryRun: true, today, summary, messages };
+
+    let sent = 0;
+    const errors = [];
+    for (const m of messages) {
+      const res = await doFetch('https://api.line.me/v2/bot/message/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.LINE_CHANNEL_TOKEN}` },
+        body: JSON.stringify({ to: m.to, messages: [{ type: 'text', text: m.text }] }),
+      });
+      if (res.ok) sent++; else errors.push(res.status);
+    }
+    await writeAudit(storage, { action: 'line-overdue', username: 'cron', ok: errors.length === 0, count: sent, detail: JSON.stringify(summary) }, nowMs());
+    return { ok: errors.length === 0, today, summary, sent, errors };
+  }
+
+  async function handleNotifyOverdue(request, env) {
+    const auth = await requireUser(request, env, ['admin']);
+    if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
+    let body = {};
+    try { body = await request.json(); } catch (e) { body = {}; }
+    const result = await runOverdueNotify(env, { dryRun: body.dryRun !== false });
+    // ไม่คืน groupId ปลายทางให้ client
+    const { messages, ...rest } = result;
+    return json(request, env, { ...rest, preview: (messages || []).map(m => m.text) }, result.ok ? 200 : 502);
+  }
+
   async function handleAudit(request, env, url) {
     const auth = await requireUser(request, env, ['admin']);
     if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
@@ -822,6 +907,10 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
         return handleFollowupAdd(request, env);
       }
 
+      if (request.method === 'POST' && path === '/notify-overdue') {
+        return handleNotifyOverdue(request, env);
+      }
+
       if (request.method === 'GET' && path === '/audit') {
         return handleAudit(request, env, url);
       }
@@ -860,6 +949,12 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
       }
 
       return json(request, env, { error: 'not found' }, 404);
+    },
+
+    // Cron Trigger (wrangler.toml [triggers]) → แจ้งผู้ป่วยเกินนัดทาง LINE
+    async scheduled(event, env, ctx) {
+      const job = runOverdueNotify(env).catch(() => null);
+      if (ctx && ctx.waitUntil) ctx.waitUntil(job); else await job;
     },
   };
 }
