@@ -1,4 +1,4 @@
-:root{--bg:#f4f6f8;--card:#fff;--text:#1a1f24;--border:#dfe3e7;--primary:#2c6e91;--primary-light:#3f8ab0;--primary-dark:#1a4a63;--danger:#c0392b;--success:#1e7e34;--radius:12px}
+:root{--bg:#fbf7ff;--card:#fff;--text:#1e1b2e;--border:#e7defa;--primary:#7c3aed;--primary-light:#9b5cff;--primary-dark:#5b21b6;--accent:#db2777;--teal:#0f9f8f;--amber:#f59e0b;--sky:#0284c7;--danger:#dc2626;--success:#15803d;--radius:14px}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;font-family:'Kanit','Segoe UI',Tahoma,Arial,sans-serif;background:linear-gradient(180deg,#eef2f5 0%,var(--bg) 220px);color:var(--text);line-height:1.55}
@@ -152,3 +152,55 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
 .followup-history { padding-left: 18px; max-height: 220px; overflow: auto; }
 .followup-coverage { margin-bottom: 12px; }
 .followup-coverage summary { cursor: pointer; padding: 6px 0; }
+
+/* ---------- ธีมสดใส (v2.1) — สีหลักม่วง→ชมพู + สีเสริมฟ้าอมเขียว/อำพัน/ฟ้า; ข้อความขาวบนสีหลักผ่าน WCAG AA ---------- */
+body{background:radial-gradient(1200px 400px at 10% -10%,#ffe4f3 0%,transparent 60%),radial-gradient(1000px 380px at 95% -5%,#dff7ff 0%,transparent 55%),linear-gradient(180deg,#f6efff 0%,var(--bg) 260px)}
+header.topbar{background:linear-gradient(120deg,var(--primary-dark) 0%,var(--primary) 45%,var(--accent) 100%);box-shadow:0 4px 18px rgba(124,58,237,.35)}
+.nav-btn.active{color:var(--primary-dark)}
+h2{color:var(--primary-dark);border-image:linear-gradient(180deg,var(--accent),var(--primary)) 1}
+.card{border-color:var(--border);box-shadow:0 1px 2px rgba(91,33,182,.05),0 6px 18px rgba(124,58,237,.08)}
+.card:hover{box-shadow:0 2px 4px rgba(91,33,182,.06),0 14px 30px rgba(219,39,119,.14)}
+.btn{background:linear-gradient(120deg,var(--primary) 0%,#9333ea 50%,var(--accent) 100%);box-shadow:0 2px 6px rgba(124,58,237,.3)}
+.btn:hover{box-shadow:0 4px 10px rgba(124,58,237,.3),0 10px 22px rgba(219,39,119,.3)}
+.btn-outline{background:#fff;color:var(--primary-dark);border:1.5px solid var(--primary)}
+.btn-outline:hover{background:#f3ebff}
+.btn-danger{background:linear-gradient(120deg,#ef4444,var(--danger) 60%,#b91c1c)}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+::selection{background:var(--accent)}
+.kpi-card{border-left-color:var(--sky);background:linear-gradient(155deg,#fff 0%,#eef8ff 100%)}
+.kpi-grid .kpi-card:nth-child(4n+2){border-left-color:var(--teal);background:linear-gradient(155deg,#fff 0%,#e9fbf7 100%)}
+.kpi-grid .kpi-card:nth-child(4n+3){border-left-color:var(--amber);background:linear-gradient(155deg,#fff 0%,#fff7e6 100%)}
+.kpi-grid .kpi-card:nth-child(4n+4){border-left-color:var(--primary);background:linear-gradient(155deg,#fff 0%,#f5efff 100%)}
+.kpi-card.kpi-danger{border-left-color:var(--danger);background:linear-gradient(155deg,#fff 0%,#fff0f0 100%)}
+.kpi-card.kpi-ok{border-left-color:var(--success);background:linear-gradient(155deg,#fff 0%,#ecfdf3 100%)}
+.kpi-value{background:linear-gradient(120deg,var(--primary-dark),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+.kpi-card.kpi-danger .kpi-value{background:none;color:var(--danger)}
+.kpi-card.kpi-ok .kpi-value{background:none;color:var(--success)}
+.chart-box{box-shadow:0 1px 2px rgba(91,33,182,.05),0 6px 16px rgba(2,132,199,.08)}
+.chart-box h3{color:var(--primary-dark)}
+.chart-download-btn{color:var(--primary-dark)}
+.chart-download-btn:hover{background:#f3ebff}
+.finding-info{border-left-color:var(--sky);background:#eaf6ff}
+.finding-warn{border-left-color:var(--amber);background:#fff7e6}
+table.report-table thead th{background:linear-gradient(120deg,var(--primary-dark),var(--primary) 60%,#9333ea)}
+table.report-table tbody tr:nth-child(even){background:#faf7ff}
+table.report-table tbody tr:hover{background:#fdf0f8}
+.total-row{background:linear-gradient(90deg,#f1e9ff,#fce7f3) !important}
+.subtotal-row{background:linear-gradient(90deg,#e0f2fe,#f0f9ff) !important;color:#075985}
+.subtotal-row td:first-child{border-left-color:var(--sky)}
+.followup-badge.overdue{background:#ffe4e6;color:#be123c}
+.followup-badge.today{background:#fef3c7;color:#92400e}
+
+/* ---------- การเข้าถึง (a11y) ---------- */
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+.btn:focus-visible,.nav-btn:focus-visible{outline:3px solid #fbbf24;outline-offset:2px}
+table.report-table th[data-sort-key]:focus-visible{outline:3px solid #fbbf24;outline-offset:-3px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+  .card:hover,.chart-box:hover,.kpi-card:hover,.btn:hover{transform:none}
+}
+@media (max-width: 640px){
+  .btn,.nav-btn,.filter-bar input,.filter-bar select{min-height:44px}
+  .chart-grid{grid-template-columns:1fr}
+  .followup-dialog{width:calc(100vw - 32px);padding:16px}
+}
