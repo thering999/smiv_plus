@@ -11,22 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260925d">
+<link rel="stylesheet" href="style.css?v=20261008a">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 </head>
 <body>
-<div id="gateOverlay" class="gate-overlay">
-  <div class="gate-box">
-    <h2>🧠 SMI-V Plus</h2>
-    <p class="note">ระบบนี้ไม่เปิดเผยต่อสาธารณะทั่วไป — กรุณาใส่รหัสผ่านที่ได้รับจากผู้ดูแลระบบ</p>
-    <input type="password" id="gatePass" placeholder="รหัสผ่าน">
-    <button class="btn" id="gateBtn" style="width:100%;margin-top:8px">เข้าใช้งาน</button>
-    <p id="gateError" class="status error" style="display:none">รหัสผ่านไม่ถูกต้อง</p>
-  </div>
-</div>
 <header class="topbar">
   <div class="brand">
     <svg class="logo-mark" width="34" height="34" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -34,13 +25,13 @@
       <path d="M24 8c-4 0-7 3-7 6.5 0 1.5.5 2.8 1.3 3.9C16.7 19.6 15 22.4 15 25.5 15 31.3 19.7 36 24 36s9-4.7 9-10.5c0-3.1-1.7-5.9-3.3-7.1.8-1.1 1.3-2.4 1.3-3.9C31 11 28 8 24 8z" fill="#fff"/>
       <path d="M20 24l2.5 3L27 20" stroke="#2c6e91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
     </svg>
-    <span>SMI-V Plus <small>ระบบรายงาน SMI-V เขตสุขภาพ · static, ไม่มี server</small></span>
+    <span>SMI-V Plus <small>ระบบรายงาน SMI-V เขตสุขภาพ · GitHub Pages + Cloudflare Worker (ยืนยันตัวตน)</small></span>
   </div>
   <nav class="nav">
     <button type="button" class="nav-btn active" id="navDashboard" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button type="button" class="nav-btn" id="navReference" onclick="showTab('reference')">📖 คู่มือรหัส</button>
     <a class="nav-btn" href="links.html">🔗 ลิงก์ทั้งหมด</a>
-    <button type="button" class="nav-btn" id="navLogout" onclick="sessionStorage.removeItem('smiv_gate_ok'); sessionStorage.removeItem('smiv_gate_role'); location.reload()">🔒 ออกจากระบบ</button>
+    <button type="button" class="nav-btn" id="navLogout" onclick="logoutUser()">🔒 ออกจากระบบ</button>
   </nav>
   <div id="publishedAt" class="note" style="color:#fff"></div>
 </header>
@@ -55,6 +46,32 @@
 <div id="execSummaryPrint" hidden></div>
 <div id="historyViewBanner" class="alert" hidden style="background:#eaf1f5;color:var(--primary-dark);border-color:var(--primary)">
   <span></span> — <a href="#" id="exitHistoryViewBtn">กลับสู่ข้อมูลล่าสุด</a>
+</div>
+
+<div id="authBanner" class="alert" hidden style="background:#e8f5ec;color:#1c6b3c;border-color:#b7e0c6">
+  <strong>🔐 <span id="authUserLabel"></span></strong>
+  <div id="authBannerText" style="margin-top:4px"></div>
+  <p style="margin:8px 0 0">
+    <button type="button" class="btn btn-outline" id="authReloadBtn">🔄 ดึงข้อมูลจริงล่าสุด</button>
+    <button type="button" class="btn btn-outline" id="authLogoutBtn">🔒 ออกจากระบบ</button>
+  </p>
+</div>
+
+<div class="card" id="authLoginBox">
+  <h2 style="margin-top:0;border:none;padding-left:0">🔐 เข้าสู่ระบบเพื่อดูข้อมูลผู้ป่วยตัวจริง (สำหรับติดตามรายคน)</h2>
+  <p class="note">หน้าเว็บนี้เปิดดูได้ทั่วไป แต่จะเห็นเฉพาะ <strong>ข้อมูลที่ปิดบังชื่อ-สกุลและเลขบัตรประชาชนแล้ว</strong> เท่านั้น
+    (พอสำหรับดูตัวชี้วัด/แนวโน้ม/วางแผน) — ผู้ที่ต้องติดตามผู้ป่วยรายคนให้เข้าสู่ระบบด้วยบัญชีที่ได้รับจากผู้ดูแลระบบ
+    ระบบจะแสดงเลขบัตรประชาชน 13 หลักเต็ม พร้อมจำกัดสิทธิ์ให้เห็นเฉพาะอำเภอที่รับผิดชอบ</p>
+  <form id="authLoginForm" autocomplete="on" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;max-width:760px">
+    <div><label style="display:block;font-size:.85em;font-weight:600;margin-bottom:4px">ชื่อผู้ใช้</label>
+      <input type="text" id="authUsername" name="username" autocomplete="username" required style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit"></div>
+    <div><label style="display:block;font-size:.85em;font-weight:600;margin-bottom:4px">รหัสผ่าน</label>
+      <input type="password" id="authPassword" name="password" autocomplete="current-password" required style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit"></div>
+    <div><button class="btn" type="submit" id="authLoginBtn">เข้าสู่ระบบ</button></div>
+  </form>
+  <p id="authStatus" class="status"></p>
+  <p class="note">🔒 ข้อมูลผู้ป่วยเป็นข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล (PDPA) — ห้ามคัดลอก ส่งต่อ
+    หรือเผยแพร่ข้อมูลที่เห็นในโหมดนี้ และควรออกจากระบบเมื่อเลิกใช้เครื่องที่ใช้ร่วมกัน</p>
 </div>
 
 <p style="margin:0 0 14px">
@@ -79,7 +96,9 @@
     <button class="btn btn-danger" id="clearDataBtn">🗑️ ล้างข้อมูล</button>
   </p>
   <p id="githubPublishStatus" class="status"></p>
-  <p class="note">🚀 = อัปโหลดตรงเข้า GitHub ทันที ไม่ต้องถาม token เลย (ระบบส่งข้อมูลผ่านตัวกลาง Cloudflare Worker ที่เก็บ token จริงไว้ฝั่งเซิร์ฟเวอร์ ไม่เคยอยู่ในเบราว์เซอร์หรือซอร์สโค้ดที่เผยแพร่)
+  <p class="note">🚀 = เผยแพร่ทันที (ต้องเข้าสู่ระบบเป็นผู้ดูแลระบบเท่านั้น) — ระบบส่งข้อมูลผ่านตัวกลาง Cloudflare Worker ที่
+    <strong>เก็บข้อมูลผู้ป่วยตัวจริง (รวมเลขบัตรประชาชน) ไว้ในพื้นที่ส่วนตัวที่ต้องล็อกอินจึงอ่านได้</strong> และส่งขึ้น GitHub เฉพาะ
+    <strong>สำเนาที่ปิดบังชื่อ-สกุล/เลขบัตรประชาชนแล้ว</strong> — GitHub token ไม่เคยอยู่ในเบราว์เซอร์หรือซอร์สโค้ดที่เผยแพร่
   </p>
   <div id="publishHelper" class="card" hidden style="background:#e6f4ea;border-color:var(--success);margin-top:10px">
     <strong>ขั้นตอนถัดไป — ทำให้ทุกคนเห็นข้อมูลนี้ (data.json ดาวน์โหลดแล้ว):</strong>
@@ -153,8 +172,11 @@
 
 <div class="card" id="historyPanel" hidden>
   <h2 style="margin-top:0;border:none;padding-left:0">📜 ประวัติการนำเข้า</h2>
-  <p class="note">ทุกครั้งที่เผยแพร่เข้า GitHub ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">15</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน</p>
+  <p class="note">ทุกครั้งที่เผยแพร่ ระบบจะเก็บสำเนาข้อมูล ณ เวลานั้นไว้ให้ดูย้อนหลังได้ (เก็บล่าสุด <span id="historyKeepCount">15</span> ครั้ง) — กด "ดูข้อมูลนี้" เพื่อดูแบบอ่านอย่างเดียว ไม่กระทบข้อมูลปัจจุบัน
+    สำเนาที่นี่เป็น <strong>ชุดสาธารณะที่ปิดบังชื่อ/เลขบัตรแล้ว</strong> ส่วนข้อมูลจริงเก็บไว้ในพื้นที่ส่วนตัว (ดูด้านล่าง เฉพาะผู้ดูแลระบบ)</p>
   <div id="historyList"></div>
+  <div id="privateHistoryBox" style="margin-top:18px"></div>
+  <div id="auditBox" style="margin-top:18px"></div>
 </div>
 
 <form class="filter-bar card" onsubmit="return false">
@@ -262,9 +284,10 @@
     <canvas id="chartIssueCategory"></canvas>
   </div>
 
-  <h2>รายชื่อผู้ป่วยที่ต้องติดตาม/แก้ไขข้อมูล (<span id="problemPatientsCount">0</span> คน)</h2>
+  <h2>รายชื่อผู้ป่วยที่ต้องติดตาม/แก้ไขข้อมูล (<span id="problemPatientsCount">0</span> คน) — <span id="problemPatientsMode" class="note"></span></h2>
   <div class="card">
-    <p class="note">🔴 สูง = ก่อความรุนแรงซ้ำ (ติดตามด่วนที่สุด) · 🟠 กลาง = มีปัญหาหลายข้อ/ค้างติดตามนาน · ⚪ ปกติ = พบปัญหาข้อเดียว</p>
+    <p class="note">🔴 สูง = ก่อความรุนแรงซ้ำ (ติดตามด่วนที่สุด) · 🟠 กลาง = มีปัญหาหลายข้อ/ค้างติดตามนาน · ⚪ ปกติ = พบปัญหาข้อเดียว<br>
+      👤 ชื่อ-สกุล/เลขบัตรประชาชนในตารางนี้ใช้สำหรับติดตามรายคนเท่านั้น — <strong>ห้ามส่งต่อออกนอกหน่วยงาน</strong> (ผู้ที่ยังไม่เข้าสู่ระบบจะเห็นข้อมูลถูกปิดบัง)</p>
     <div id="problemPatientsBox"></div>
     <button class="btn btn-outline" id="exportIssuesBtn2" style="margin-top:10px">📋 ส่งออกรายชื่อปัญหา (Excel พร้อมคำแนะนำรายคน)</button>
   </div>
@@ -481,7 +504,7 @@
 </ul>
 </div>
 
-<footer>SMI-V Plus <strong>v1.4.0</strong> (GitHub Pages, static) · build 2026-09-10 — <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a> · ทำงานทั้งหมดใน browser ไม่มี server/ฐานข้อมูล</footer>
+<footer>SMI-V Plus <strong>v2.0.0</strong> (GitHub Pages, static) · build 2026-09-29 — <a href="https://github.com/thering999/smiv_plus">github.com/thering999/smiv_plus</a> · ทำงานใน browser + Cloudflare Worker (ยืนยันตัวตน/เก็บข้อมูลส่วนบุคคล) · สำเนาสาธารณะปิดบังข้อมูลส่วนบุคคลเสมอ</footer>
 </main>
 
 <script>
@@ -492,73 +515,9 @@ function showTab(tab) {
   document.getElementById('navReference').classList.toggle('active', tab === 'reference');
 }
 if (location.hash === '#reference') showTab('reference');
-
-// ด่านกันคนทั่วไป (obscurity เท่านั้น ไม่ใช่ security จริง — รหัสนี้อ่านได้จาก view-source เสมอ
-// คนที่เปิด dev tools ข้ามได้ทั้งด่านและ throttle นี้ — เป็นแค่กันคนกดมั่วธรรมดา)
-// เปลี่ยนรหัสผ่านได้ที่บรรทัดถัดไป แล้ว publish ใหม่
-const GATE_PASSPHRASE = 'smiv49000muk';
-const GATE_VIEWER_PASSPHRASE = 'smiv49000view'; // รหัสสำหรับคนนอกทีม — ดูได้อย่างเดียว แก้ไข/publish/ลบไม่ได้
-const GATE_MAX_ATTEMPTS = 3;
-const GATE_LOCKOUT_MS = 5 * 60 * 1000; // 5 นาที
-(function () {
-  const overlay = document.getElementById('gateOverlay');
-  const btn = document.getElementById('gateBtn');
-  const errEl = document.getElementById('gateError');
-  if (sessionStorage.getItem('smiv_gate_ok') === '1') {
-    overlay.style.display = 'none';
-    if (sessionStorage.getItem('smiv_gate_role') === 'viewer') document.body.classList.add('viewer-role');
-    return;
-  }
-
-  function getAttempts() {
-    try { return JSON.parse(localStorage.getItem('smiv_gate_attempts') || '{"count":0,"lockedUntil":0}'); }
-    catch (e) { return { count: 0, lockedUntil: 0 }; }
-  }
-  function setAttempts(a) { try { localStorage.setItem('smiv_gate_attempts', JSON.stringify(a)); } catch (e) {} }
-
-  function updateLockUi() {
-    const a = getAttempts();
-    const remain = a.lockedUntil - Date.now();
-    if (remain > 0) {
-      btn.disabled = true;
-      const mins = Math.ceil(remain / 60000);
-      errEl.textContent = `ลองผิดหลายครั้งเกินไป กรุณารออีกประมาณ ${mins} นาที`;
-      errEl.style.display = 'block';
-      setTimeout(updateLockUi, 10000);
-    } else {
-      btn.disabled = false;
-    }
-  }
-  updateLockUi();
-
-  function tryUnlock() {
-    const a = getAttempts();
-    if (a.lockedUntil > Date.now()) { updateLockUi(); return; }
-    const val = document.getElementById('gatePass').value;
-    if (val === GATE_PASSPHRASE || val === GATE_VIEWER_PASSPHRASE) {
-      setAttempts({ count: 0, lockedUntil: 0 });
-      sessionStorage.setItem('smiv_gate_ok', '1');
-      sessionStorage.setItem('smiv_gate_role', val === GATE_VIEWER_PASSPHRASE ? 'viewer' : 'admin');
-      if (val === GATE_VIEWER_PASSPHRASE) document.body.classList.add('viewer-role');
-      overlay.style.display = 'none';
-    } else {
-      const count = a.count + 1;
-      const lockedUntil = count >= GATE_MAX_ATTEMPTS ? Date.now() + GATE_LOCKOUT_MS : 0;
-      setAttempts({ count: lockedUntil ? 0 : count, lockedUntil });
-      if (lockedUntil) {
-        updateLockUi();
-      } else {
-        errEl.textContent = `รหัสผ่านไม่ถูกต้อง (เหลือ ${GATE_MAX_ATTEMPTS - count} ครั้งก่อนถูกล็อกชั่วคราว)`;
-        errEl.style.display = 'block';
-      }
-    }
-  }
-  btn.addEventListener('click', tryUnlock);
-  document.getElementById('gatePass').addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-})();
 </script>
-<!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js -->
-<script src="app.js?v=20260925d"></script>
-<script src="ui.js?v=20260925d"></script>
+<!-- v= คือ cache-buster กันเบราว์เซอร์ค้าง JS เก่าหลัง deploy ใหม่ — ต้องขยับเลขทุกครั้งที่แก้ app.js/ui.js (และขยับ CACHE_VERSION ใน sw.js ให้ตรงกัน) -->
+<script src="app.js?v=20261008a"></script>
+<script src="ui.js?v=20261008a"></script>
 </body>
 </html>

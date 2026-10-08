@@ -1,0 +1,8 @@
+# SMI-V Plus — ห้าม index ไฟล์ข้อมูลทั้งหมด (มีข้อมูลผู้ป่วย/สำเนาข้อมูล หรือเอกสารภายใน)
+User-agent: *
+Disallow: /smiv_plus/data.json
+Disallow: /smiv_plus/history/
+Disallow: /smiv_plus/links.html
+Disallow: /smiv_plus/*.xlsx
+Disallow: /smiv_plus/*.pdf
+Allow: /smiv_plus/

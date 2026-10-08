@@ -3,6 +3,7 @@
   "private": true,
   "description": "Regression tests for the SMI-V Plus calculation engine (docs/app.js)",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js test/*.test.mjs",
+    "worker:hash": "node worker/hash-password.mjs"
   }
 }
