@@ -229,3 +229,20 @@ test('publishToGithub: ถ้า Worker ที่ deploy ยังเป็น�
   assert.equal(calls.filter(c => !c.url.includes('/health')).length, 0, 'ต้องไม่ส่งข้อมูลผู้ป่วยไปเลยถ้า Worker เก่า');
   assert.match(sandbox.document.getElementById('githubPublishStatus').textContent, /เวอร์ชันเก่า|ต้อง deploy/);
 });
+
+test('followupCoverage: นับติดตามใน 90 วัน และเกินนัด (ไม่นับปิดเคส) แยกอำเภอ', () => {
+  const rows = [
+    { p: { hoscode: 'H', pid: '1', ampur: '01' } },
+    { p: { hoscode: 'H', pid: '2', ampur: '01' } },
+    { p: { hoscode: 'H', pid: '3', ampur: '01' } },
+    { p: { hoscode: 'H', pid: '4', ampur: '02' } },
+  ];
+  const map = {
+    'H-1': { lastAt: '2026-10-01T03:00:00Z', lastStatus: 'visited', nextDate: '2026-10-05' },
+    'H-2': { lastAt: '2026-05-01T03:00:00Z', lastStatus: 'visited', nextDate: '2026-06-01' },
+    'H-3': { lastAt: '2026-10-02T03:00:00Z', lastStatus: 'closed', nextDate: '2026-10-03' },
+  };
+  const cov = sandbox.followupCoverage(rows, map, '2026-10-08');
+  assert.deepEqual({ ...cov['01'] }, { total: 3, followed: 2, overdue: 2 });
+  assert.deepEqual({ ...cov['02'] }, { total: 1, followed: 0, overdue: 0 });
+});

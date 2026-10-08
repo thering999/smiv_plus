@@ -150,3 +150,5 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
 .followup-dialog label { display: block; font-weight: 600; font-size: .85em; margin: 10px 0 4px; }
 .followup-dialog select, .followup-dialog input, .followup-dialog textarea { width: 100%; box-sizing: border-box; padding: 8px; font-family: inherit; }
 .followup-history { padding-left: 18px; max-height: 220px; overflow: auto; }
+.followup-coverage { margin-bottom: 12px; }
+.followup-coverage summary { cursor: pointer; padding: 6px 0; }
