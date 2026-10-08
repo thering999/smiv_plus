@@ -272,3 +272,8 @@ test('followupCoverage: อำเภอรหัสเดียวกันแ�
   assert.equal(cov['นอกจังหวัด'].total, 2);
   assert.equal(cov['09'], undefined);
 });
+
+test('addressLabel: ในจังหวัดแสดง ต./อ., นอกจังหวัดแสดง ต./อ./จ. และไม่มีชื่อก็ใช้รหัสแทน', () => {
+  assert.equal(sandbox.addressLabel({ chw_addr: '49', ampur: '01', tambon: '01' }), 'ต.01 อ.เมืองมุกดาหาร');
+  assert.equal(sandbox.addressLabel({ chw_addr: '34', ampur: '01', tambon: '01' }), 'ต.01 อ.01 จ.อุบลราชธานี');
+});

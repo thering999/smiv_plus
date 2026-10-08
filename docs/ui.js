@@ -8,10 +8,23 @@ const { state, readWorkbook, validateAndParse, buildReport, analyzeArea, countFi
   buildViolenceTypeDropoutReport, buildViolenceTypeDropoutReportByArea,
   parseRegistryWorkbook, crossCheckRegistry, parseExchangeDetailedWorkbook, provinceName } = window.smivEngine;
 
-// ชื่ออำเภอของผู้ป่วย: รหัสอำเภอซ้ำข้ามจังหวัดได้ จึงแปลเป็นชื่ออำเภอมุกดาหารเฉพาะคนที่ภูมิลำเนาอยู่ในจังหวัด
-function ampurLabel(p) {
-  if (p.chw_addr && p.chw_addr !== '49') return `${provinceName(p.chw_addr)} อ.${p.ampur || '-'}`;
-  return KNOWN_AMPUR[p.ampur] || p.ampur || '-';
+// ชื่อพื้นที่เต็ม ต./อ./จ. จาก docs/geo.json (สร้างจาก db/campur.sql + db/ctambon.sql) — โหลดครั้งเดียว ไม่มีก็ใช้รหัสแทน
+let geoNames = null;
+async function loadGeoNames() {
+  try {
+    const res = await fetch('./geo.json');
+    if (res.ok) geoNames = await res.json();
+  } catch (e) { /* offline → แสดงรหัส */ }
+  return geoNames;
+}
+function addressLabel(p) {
+  const chw = String(p.chw_addr || '');
+  const amp = String(p.ampur || '');
+  const tam = String(p.tambon || '');
+  const outside = chw && chw !== '49';
+  const ampName = (geoNames && geoNames.a[chw + amp]) || (!outside && KNOWN_AMPUR[amp]) || amp || '-';
+  const tamName = (geoNames && geoNames.t[chw + amp + tam]) || tam || '-';
+  return `ต.${tamName} อ.${ampName}${outside ? ` จ.${provinceName(chw)}` : ''}`;
 }
 
 // ลดพื้นที่ว่างของกราฟทุกตัว (ค่า default ของ Chart.js สูงเกินไปเมื่อมีข้อมูลน้อยจุด เช่น trend ปีเดียว)
@@ -1275,7 +1288,7 @@ let ppSortDir = 'desc';
 let ppVisibleCount = 20;
 let ppOverdueOnly = false;
 
-const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'อำเภอ/ตำบล', daysOverdue: 'ค้างติดตามมา' };
+const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'ที่อยู่ (ต./อ./จ.)', daysOverdue: 'ค้างติดตามมา' };
 const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
 
 // ความครอบคลุมการติดตามรายอำเภอ: ในรายชื่อที่ต้องติดตาม มีกี่คนที่ได้รับการติดตามใน N วันล่าสุด / เกินนัดกี่คน
@@ -1334,14 +1347,14 @@ function renderProblemPatientsTable() {
   if (ppOverdueOnly) rows = rows.filter(({ p }) => followupDue(p) === 'overdue');
   if (ppSearchTerm.trim()) {
     const term = ppSearchTerm.trim().toLowerCase();
-    rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon].some(v => (v || '').toLowerCase().includes(term)));
+    rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon, addressLabel(p)].some(v => (v || '').toLowerCase().includes(term)));
   }
   rows = rows.slice().sort((a, b) => {
     let av, bv;
     if (ppSortKey === 'priority') { av = PP_PRIORITY_ORDER[a.priority]; bv = PP_PRIORITY_ORDER[b.priority]; }
     else if (ppSortKey === 'name') { av = (a.p.name || '') + (a.p.lname || ''); bv = (b.p.name || '') + (b.p.lname || ''); }
     else if (ppSortKey === 'hosname') { av = a.p.hosname || ''; bv = b.p.hosname || ''; }
-    else if (ppSortKey === 'ampur') { av = a.p.ampur || ''; bv = b.p.ampur || ''; }
+    else if (ppSortKey === 'ampur') { av = `${a.p.chw_addr || ''}${a.p.ampur || ''}${a.p.tambon || ''}`; bv = `${b.p.chw_addr || ''}${b.p.ampur || ''}${b.p.tambon || ''}`; }
     else if (ppSortKey === 'cid') { av = a.p.cid || ''; bv = b.p.cid || ''; }
     else { av = a.daysOverdue ?? -1; bv = b.daysOverdue ?? -1; }
     if (av < bv) return ppSortDir === 'asc' ? -1 : 1;
@@ -1362,7 +1375,7 @@ function renderProblemPatientsTable() {
         <button type="button" class="btn btn-outline" data-copy-cid="${escapeHtml(p.cid)}" style="padding:2px 8px;font-size:.8em;margin-left:4px" title="คัดลอกเลขบัตรประชาชน">⧉</button>` : '<span class="note">ไม่มีในข้อมูล</span>'}
         <div class="note" style="margin:2px 0 0">pid: ${escapeHtml(p.pid || '-')}</div></td>` : '<td class="note">🔒 ปิดบัง</td>'}
       <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
-      <td>${escapeHtml(ampurLabel(p))}/${escapeHtml(p.tambon || '-')}</td>
+      <td>${escapeHtml(addressLabel(p))}</td>
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
       <td>${issues.join(', ')}</td>
       ${piiLoaded ? `<td>${followupCellHtml(p)}</td>` : ''}
@@ -1383,7 +1396,7 @@ function renderProblemPatientsTable() {
       <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน</div>
     </div>
     <div class="table-scroll"><table class="report-table">
-    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th>${piiLoaded ? '<th>การติดตาม</th>' : ''}</tr></thead>
+    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'ที่อยู่ (ต./อ./จ.)')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th>${piiLoaded ? '<th>การติดตาม</th>' : ''}</tr></thead>
     <tbody>${rowsHtml}</tbody></table></div>
     ${filteredCount > ppVisibleCount ? `<button class="btn btn-outline" id="ppShowMoreBtn" style="margin-top:10px">แสดงเพิ่ม (${Math.min(50, filteredCount - ppVisibleCount)} จาก ${filteredCount - ppVisibleCount} ที่เหลือ)</button>` : ''}`;
 
@@ -1461,7 +1474,7 @@ function buildWorklistHtml(rows, todayYmd) {
         <td>${i + 1}</td>
         <td>${r.priority === 'สูง' ? '🔴' : r.priority === 'กลาง' ? '🟠' : '⚪'} ${escapeHtml(r.priority)}</td>
         <td>${escapeHtml(`${p.name || ''} ${p.lname || ''}`)}<br><small>cid ${escapeHtml(p.cid || '-')} · pid ${escapeHtml(p.pid || '-')}</small></td>
-        <td>ต.${escapeHtml(p.tambon || '-')} ${escapeHtml(ampurLabel(p))}</td>
+        <td>${escapeHtml(addressLabel(p))}</td>
         <td>${r.daysOverdue === null ? '-' : escapeHtml(r.daysOverdue.toLocaleString('th-TH'))}</td>
         <td>${f ? `${escapeHtml(FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '')}<br><small>${escapeHtml((f.lastAt || '').slice(0, 10))}</small>` : '-'}</td>
         <td>${f && f.nextDate ? escapeHtml(f.nextDate) : '-'}${due === 'overdue' ? '<br><b>เกินนัด</b>' : ''}</td>
@@ -2258,6 +2271,7 @@ async function exitHistoryView() {
   viewingHistory = false;
   document.getElementById('historyViewBanner').hidden = true;
   await reloadCurrentSource();
+  loadGeoNames().then(names => { if (names) renderProblemPatientsTable(); });
 }
 
 function clearAllData() {
