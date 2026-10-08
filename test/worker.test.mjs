@@ -14,7 +14,7 @@ import {
   toPublicPayload, validatePublishPayload, scopePatientsForUser, sanitizeUser,
   createLoginThrottle, createWorkerHandler, storageFor,
   PII_CURRENT_KEY, PII_HISTORY_PREFIX, MAX_PATIENTS,
-  AUDIT_PREFIX, writeAudit, readAudit, validateFollowupInput,
+  AUDIT_PREFIX, writeAudit, readAudit, validateFollowupInput, collectOverdue,
 } from '../worker/lib.mjs';
 
 // ---------- ตัวช่วย ----------
@@ -558,4 +558,47 @@ test('validateFollowupInput: ปฏิเสธ status/วันที่/id/บ
   assert.equal(validateFollowupInput({ ...base, nextDate: '2026-13-45' }, { nowMs: now }).ok, false);
   assert.equal(validateFollowupInput({ ...base, nextDate: '2030-01-01' }, { nowMs: now }).ok, false);
   assert.equal(validateFollowupInput({ ...base, note: 'x'.repeat(501) }, { nowMs: now }).ok, false);
+});
+
+
+// ---------- แจ้งเกินนัดทาง LINE ----------
+test('collectOverdue: นับเฉพาะเลยนัด ไม่ปิดเคส และยังอยู่ในข้อมูลปัจจุบัน', () => {
+  const patients = [patient({ pid: '1', ampur: '01' }), patient({ pid: '2', ampur: '01' }), patient({ pid: '3', ampur: '02' })];
+  const rec = (pid, ampur, status, nextDate) => ({ hoscode: '10712', pid, ampur, entries: [{ at: 'x', status, nextDate }] });
+  const out = collectOverdue([
+    rec('1', '01', 'visited', '2026-10-01'),
+    rec('2', '01', 'closed', '2026-10-01'),
+    rec('3', '02', 'visited', '2026-10-08'),
+    rec('9', '01', 'visited', '2026-10-01'),
+  ], patients, '2026-10-08');
+  assert.deepEqual(Object.keys(out), ['01']);
+  assert.equal(out['01'].total, 1);
+});
+
+test('notify-overdue + cron: ส่ง LINE ต่ออำเภอ/จังหวัด ข้อความไม่มี PII, admin เท่านั้น', async () => {
+  const lineCalls = [];
+  const fetchImpl = async (url, init) => { lineCalls.push({ url: String(url), body: JSON.parse(init.body), auth: init.headers.Authorization }); return { ok: true, status: 200, json: async () => ({}) }; };
+  const env = await envWithPasswords({ admin: 'admin-pass-1234', muk01: 'muk01-pass-1234' }, {
+    LINE_CHANNEL_TOKEN: 'line-token', LINE_TARGETS: JSON.stringify({ '01': 'Cgroup01', '*': 'Cprov' }),
+  });
+  const handler = createWorkerHandler({ fetchImpl, nowMs: () => Date.parse('2026-10-08T02:00:00Z') });
+  await env._kv.put(PII_CURRENT_KEY, JSON.stringify({ patients: [patient({ pid: '1', ampur: '01' })] }));
+  await env._kv.put('followup/01/10712-1', JSON.stringify({ hoscode: '10712', pid: '1', ampur: '01', entries: [{ at: 'x', status: 'visited', nextDate: '2026-10-01' }] }));
+
+  const viewer = (await loginAs(handler, env, 'muk01', 'muk01-pass-1234')).body.token;
+  assert.equal((await handler.fetch(req('/notify-overdue', { token: viewer, body: {} }), env)).status, 403);
+
+  const admin = (await loginAs(handler, env, 'admin', 'admin-pass-1234')).body.token;
+  const dry = await (await handler.fetch(req('/notify-overdue', { token: admin, body: {} }), env)).json();
+  assert.equal(dry.dryRun, true);
+  assert.deepEqual(dry.summary, { '01': 1 });
+  assert.ok(!JSON.stringify(dry).includes('Cgroup01'), 'ไม่คืน groupId ให้ client');
+  assert.equal(lineCalls.length, 0);
+
+  await handler.scheduled({}, env, null);
+  assert.deepEqual(lineCalls.map(c => c.body.to).sort(), ['Cgroup01', 'Cprov']);
+  assert.equal(lineCalls[0].auth, 'Bearer line-token');
+  const text = lineCalls.map(c => c.body.messages[0].text).join('\n');
+  assert.ok(text.includes('เกินวันนัดติดตาม 1 คน'));
+  assert.ok(!text.includes('1234567890123') && !text.includes('สมชาย') && !text.includes('ใจดี'), 'LINE ต้องไม่มี PII');
 });

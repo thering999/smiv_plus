@@ -30,7 +30,14 @@ workers_dev = true
 # binding = "LOGIN_KV"
 # id = "<kv-namespace-id>"
 
+# แจ้งผู้ป่วยเกินนัดทาง LINE ทุกวัน 08:00 น. (เวลาไทย = 01:00 UTC)
+# ไม่ได้ตั้ง LINE_CHANNEL_TOKEN/LINE_TARGETS → cron รันแบบ dry-run ไม่ส่งอะไรออก
+[triggers]
+crons = ["0 1 * * *"]
+
 # secret ที่ต้องตั้ง (ห้ามอยู่ในไฟล์นี้):
+#   npx wrangler secret put LINE_CHANNEL_TOKEN  # (ไม่บังคับ) Messaging API channel access token
+#   npx wrangler secret put LINE_TARGETS        # (ไม่บังคับ) {"01":"<groupId>","*":"<groupId ผู้ดูแลจังหวัด>"}
 #   npx wrangler secret put GH_TOKEN          # GitHub PAT: Contents read/write ของ repo นี้เท่านั้น
 #   npx wrangler secret put SESSION_SECRET    # สุ่มยาวๆ: node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
 #   npx wrangler secret put AUTH_USERS        # ได้จาก: node worker/hash-password.mjs print
