@@ -48,6 +48,7 @@ function makeGithubStub() {
     }
     if (method === 'PUT') {
       const body = JSON.parse(init.body);
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(body.content)) return { status: 422, ok: false, json: async () => ({ message: 'content is not valid Base64' }), text: async () => '' };
       files.set(path, Buffer.from(String(body.content).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
       return { status: 200, ok: true, json: async () => ({ ok: true }), text: async () => '' };
     }

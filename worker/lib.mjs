@@ -51,6 +51,8 @@ export function bytesToUtf8(bytes) { return decoder.decode(bytes); }
 export function bytesToB64Url(bytes) {
   return btoa(bytesToBinary(bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
+// GitHub Contents API ต้องการ Base64 มาตรฐาน (+ / =) — ห้ามใช้ base64url กับ GitHub
+export function bytesToB64(bytes) { return btoa(bytesToBinary(bytes)); }
 export function b64UrlToBytes(str) {
   const padded = String(str).replace(/[-]/g, '+').replace(/_/g, '/');
   const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
@@ -457,7 +459,7 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
   }
 
   async function ghPutFile(path, obj, sha, token, message) {
-    const content = bytesToB64Url(utf8ToBytes(JSON.stringify(obj)));
+    const content = bytesToB64(utf8ToBytes(JSON.stringify(obj)));
     const res = await doFetch(`${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
       method: 'PUT',
       headers: { ...ghHeaders(token), 'Content-Type': 'application/json' },
