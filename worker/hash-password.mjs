@@ -9,7 +9,8 @@
  *   node worker/hash-password.mjs print          → พิมพ์ JSON สำหรับ `wrangler secret put AUTH_USERS`
  *
  * ไฟล์เก็บรายชื่อ: worker/users.local.json (อยู่ใน .gitignore — ห้าม commit)
- * ampur = รหัสอำเภอ 2 หลัก (01-07) เพื่อจำกัดผู้ใช้ให้เห็นเฉพาะอำเภอนั้น, ใช้ "-" = ไม่จำกัด
+ * ampur = รหัสอำเภอ 2 หลัก (01-07) เพื่อจำกัดผู้ใช้ให้เห็นเฉพาะอำเภอนั้น, ใช้ "-" กับ admin (เห็นทุกอำเภอ)
+ *   viewer ต้องระบุอำเภอเสมอ — viewer ที่ใส่ "-" จะไม่เห็นข้อมูลผู้ป่วยจริงเลย
  */
 import fs from 'node:fs';
 import path from 'node:path';
