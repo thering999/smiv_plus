@@ -1,7 +1,7 @@
 // SMI-V Plus — service worker เก็บแคชไว้ดูออฟไลน์ได้ (bump CACHE_VERSION ทุกครั้งที่แก้ไฟล์หลัก)
 // ⚠️ ต้องขยับ CACHE_VERSION ให้ตรงกับเลข v= ใน docs/index.html ด้วย ไม่งั้นผู้ใช้จะได้ไฟล์เก่าค้าง
-const CACHE_VERSION = 'smiv-plus-v20261008l';
-const APP_SHELL = ['./', './index.html', './style.css?v=20261008l', './app.js?v=20261008l', './ui.js?v=20261008l', './manifest.json'];
+const CACHE_VERSION = 'smiv-plus-v20261008m';
+const APP_SHELL = ['./', './index.html', './style.css?v=20261008m', './app.js?v=20261008m', './ui.js?v=20261008m', './manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.addAll(APP_SHELL)));
@@ -19,8 +19,9 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== location.origin) return;
 
-  // data.json: network-first (อยากได้ข้อมูลใหม่สุดก่อน) — offline ค่อย fallback ไป cache
-  if (url.pathname.endsWith('data.json')) {
+  // หน้าเว็บ (navigation) + data.json: network-first — ได้ index.html ใหม่ทันทีหลัง deploy
+  // (cache-first ทำให้ผู้ใช้ค้าง index เก่าที่ชี้ ui.js?v= เก่าไปอีกรอบ) — offline ค่อย fallback ไป cache
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('data.json')) {
     event.respondWith(
       fetch(event.request).then(res => {
         const clone = res.clone();
