@@ -615,3 +615,8 @@ test('validatePublishPayload: ปฏิเสธข้อมูลที่ป�
   assert.equal(validatePublishPayload({ ...masked, publishedAt: at }).ok, false);
   assert.equal(validatePublishPayload({ patients: [patient(), patient({ pid: '2' })], publishedAt: at }).ok, true);
 });
+
+test('validatePublishPayload: ไฟล์ HDC ที่ปิดบังมาบางส่วน (cid มี ****, ชื่อยาว) ยังเผยแพร่ได้', () => {
+  const hdc = [patient({ cid: '123456789****', name: 'สมเ***', lname: 'บุปผ*****' }), patient({ pid: '2', cid: '987654321****', name: 'วิ***', lname: 'รัตนะ*****' })];
+  assert.equal(validatePublishPayload({ patients: hdc, publishedAt: '2026-10-08T00:00:00Z' }).ok, true);
+});

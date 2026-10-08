@@ -172,7 +172,10 @@ export function validatePublishPayload(payload, { maxPatients = MAX_PATIENTS, ma
     if (!Number.isFinite(Number(p.fiscal_year_be))) return { ok: false, error: `ผู้ป่วย ${p.pid}: fiscal_year_be ไม่ใช่ตัวเลข` };
   }
   // กันเผลอเผยแพร่ข้อมูลที่ปิดบังแล้ว (เช่นโหลดจาก data.json สาธารณะ) ทับข้อมูลจริงในพื้นที่ส่วนตัว
-  const masked = payload.patients.filter(p => /\*{3}$/.test(String(p.name || '')) && !/^\d{13}$/.test(String(p.cid || ''))).length;
+  // ลายเซ็นของสำเนาสาธารณะ (toPublicPatient): ไม่มี cid เลย + ชื่อ = 1 ตัวอักษร + "***"
+  // (ไฟล์ export จาก HDC ที่ปิดบังมาบางส่วนยังมี cid และชื่อยาวกว่า → ผ่านได้)
+  const isPublicMask = v => { const s = String(v || ''); return s.length === 4 && s.endsWith('***'); };
+  const masked = payload.patients.filter(p => !p.cid && isPublicMask(p.name)).length;
   if (payload.patients.length && masked * 2 > payload.patients.length) {
     return { ok: false, error: 'ข้อมูลนี้เป็นชุดที่ปิดบังชื่อ/เลขบัตรแล้ว (จาก data.json สาธารณะ) — กรุณาอัปโหลดไฟล์ Excel ต้นฉบับก่อนเผยแพร่' };
   }
