@@ -640,3 +640,14 @@ test('followup: ผู้ป่วยนอกจังหวัดเก็บ�
   const list = await (await handler.fetch(req('/followups', { method: 'GET', token: viewer }), env)).json();
   assert.equal(list.items.length, 0);
 });
+
+test('followup ?full=1: แนบประวัติ (ไม่มี note) และยังจำกัดตามอำเภอ', async () => {
+  const { add, list, viewer, admin } = await followupSetup();
+  await add(viewer, { hoscode: '10712', pid: '1', status: 'visited', note: 'ข้อความลับ' });
+  await add(admin, { hoscode: '10712', pid: '2', status: 'phone' });
+  const mine = await (await list(viewer, '?full=1')).json();
+  assert.equal(mine.items.length, 1);
+  assert.equal(mine.items[0].entries.length, 1);
+  assert.equal(mine.items[0].entries[0].note, undefined);
+  assert.equal((await (await list(admin, '?full=1')).json()).items.length, 2);
+});

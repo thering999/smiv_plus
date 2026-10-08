@@ -1327,6 +1327,51 @@ function renderDueBadge() {
   btn.textContent = `⏰ เกินนัด ${overdue.toLocaleString('th-TH')}${today ? ` · วันนี้ ${today.toLocaleString('th-TH')}` : ''}`;
 }
 
+// ผลงานการติดตามรายเดือนต่อหน่วยบริการ: จำนวนครั้งที่บันทึก และจำนวนผู้ป่วยที่ได้รับการติดตาม (ไม่นับซ้ำในเดือนเดียวกัน)
+function monthlyFollowupByHos(items, hosnameOf, todayYmd, months = 6) {
+  const [y, m] = todayYmd.split('-').map(Number);
+  const keys = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    keys.push(d.toISOString().slice(0, 7));
+  }
+  const byHos = {};
+  for (const it of items) {
+    const hos = hosnameOf(it) || it.hoscode;
+    const row = (byHos[hos] ||= Object.fromEntries(keys.map(k => [k, { visits: 0, patients: new Set() }])));
+    for (const e of it.entries || []) {
+      const k = String(e.at || '').slice(0, 7);
+      if (!row[k]) continue;
+      row[k].visits++;
+      row[k].patients.add(`${it.hoscode}-${it.pid}`);
+    }
+  }
+  return { months: keys, rows: Object.entries(byHos).map(([hos, cells]) => ({
+    hos, cells: keys.map(k => ({ visits: cells[k].visits, patients: cells[k].patients.size })),
+  })).sort((a, b) => b.cells.reduce((n, c) => n + c.visits, 0) - a.cells.reduce((n, c) => n + c.visits, 0)) };
+}
+
+async function loadMonthlyFollowup() {
+  const box = $('#followupMonthlyBox');
+  if (!box || !isLoggedIn()) return;
+  box.innerHTML = '<p class="note">กำลังโหลดประวัติการติดตาม...</p>';
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/followups?full=1`, { headers: authHeaders(), cache: 'no-store' });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `โหลดไม่สำเร็จ (${res.status})`);
+    const hosOf = new Map(state.patients.map(p => [`${p.hoscode}-${p.pid}`, p.hosname]));
+    const { months, rows } = monthlyFollowupByHos(result.items || [], it => hosOf.get(`${it.hoscode}-${it.pid}`), todayIso());
+    const monthLabel = k => new Date(`${k}-01T00:00:00`).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+    box.innerHTML = rows.length ? `<div class="table-scroll"><table class="report-table">
+      <thead><tr><th>หน่วยบริการ</th>${months.map(k => `<th>${escapeHtml(monthLabel(k))}</th>`).join('')}<th>รวม</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${escapeHtml(r.hos)}</td>${r.cells.map(c => `<td title="${c.visits} ครั้ง / ${c.patients} คน">${c.visits ? `${c.visits.toLocaleString('th-TH')} <small class="note">(${c.patients} คน)</small>` : '-'}</td>`).join('')}<td><b>${r.cells.reduce((n, c) => n + c.visits, 0).toLocaleString('th-TH')}</b></td></tr>`).join('')}</tbody>
+    </table></div><p class="note">ตัวเลข = จำนวนครั้งที่บันทึกการติดตาม (จำนวนผู้ป่วยที่ได้รับการติดตามในเดือนนั้น)</p>`
+      : '<p class="note">ยังไม่มีการบันทึกการติดตามในช่วง 6 เดือนล่าสุด</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="note">โหลดผลงานรายเดือนไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
 function renderFollowupCoverage() {
   const box = $('#followupCoverageBox');
   if (!box) return;
@@ -1343,7 +1388,10 @@ function renderFollowupCoverage() {
         <td>${escapeHtml(KNOWN_AMPUR[a] || a)}</td><td>${v.total.toLocaleString('th-TH')}</td><td>${v.followed.toLocaleString('th-TH')}</td>
         <td>${pctTxt(v.followed, v.total)}</td><td>${v.overdue ? `<span class="followup-badge overdue">${v.overdue.toLocaleString('th-TH')}</span>` : '0'}</td>
       </tr>`).join('')}</tbody></table></div>
+    <button type="button" class="btn btn-outline" id="followupMonthlyBtn" style="margin-top:8px">📈 ผลงานการติดตามรายเดือน (แยกหน่วยบริการ)</button>
+    <div id="followupMonthlyBox" style="margin-top:8px"></div>
   </details>`;
+  $('#followupMonthlyBtn').addEventListener('click', loadMonthlyFollowup);
 }
 
 function renderProblemPatientsTable() {

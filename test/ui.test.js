@@ -307,3 +307,16 @@ test('buildOutProvinceSheets: 1 ชีตต่อจังหวัด, ไม�
   for (const sh of sheets) for (const row of sh.aoa) assert.equal(row.length, sh.aoa[0].length);
   assert.ok(!sheets.some(sh => sh.aoa.some(r => r[3] === 'a')), 'คนในจังหวัดต้องไม่อยู่ในไฟล์');
 });
+
+test('monthlyFollowupByHos: นับครั้ง/คนต่อเดือน 6 เดือนล่าสุด ไม่นับนอกช่วง', () => {
+  const items = [
+    { hoscode: 'H', pid: '1', entries: [{ at: '2026-10-01T01:00:00Z' }, { at: '2026-10-05T01:00:00Z' }, { at: '2026-01-01T00:00:00Z' }] },
+    { hoscode: 'H', pid: '2', entries: [{ at: '2026-09-15T01:00:00Z' }] },
+  ];
+  const r = sandbox.monthlyFollowupByHos(items, () => 'รพ.สต.ก', '2026-10-08');
+  assert.deepEqual([...r.months], ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
+  assert.equal(r.rows.length, 1);
+  const oct = r.rows[0].cells[5], sep = r.rows[0].cells[4];
+  assert.deepEqual({ ...oct }, { visits: 2, patients: 1 });
+  assert.deepEqual({ ...sep }, { visits: 1, patients: 1 });
+});

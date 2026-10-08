@@ -762,7 +762,11 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     const prefix = scopeAll ? FOLLOWUP_PREFIX : `${FOLLOWUP_PREFIX}${user.ampur}/`;
     const keys = await storeList(storage, prefix);
     const records = await Promise.all(keys.map(k => storeGet(storage, k)));
-    const items = records.filter(Boolean).map(summarizeFollowup);
+    // ?full=1 → แนบประวัติทุกครั้ง (ใช้สรุปผลงานรายเดือน) — ขอบเขตเดียวกับรายการสรุป (prefix ตามสิทธิ์)
+    const full = url.searchParams.get('full') === '1';
+    const items = records.filter(Boolean).map(r => full
+      ? { ...summarizeFollowup(r), entries: (Array.isArray(r.entries) ? r.entries : []).map(e => ({ at: e.at, by: e.by, status: e.status })) }
+      : summarizeFollowup(r));
     return json(request, env, { ok: true, items }, 200, { 'Cache-Control': 'no-store' });
   }
 
