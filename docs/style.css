@@ -204,3 +204,5 @@ table.report-table th[data-sort-key]:focus-visible{outline:3px solid #fbbf24;out
   .chart-grid{grid-template-columns:1fr}
   .followup-dialog{width:calc(100vw - 32px);padding:16px}
 }
+.nav-btn.nav-due{background:#fff4d6;color:#92400e;border-color:#fbbf24;font-weight:700}
+.nav-btn.nav-due:hover{background:#ffe8a3}

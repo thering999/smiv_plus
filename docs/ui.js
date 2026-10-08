@@ -1314,6 +1314,19 @@ function followupCoverage(rows, map, todayYmd, days = FOLLOWUP_COVERAGE_DAYS, de
   return byAmpur;
 }
 
+// ป้ายบนแถบด้านบน: จำนวนเกินนัด/นัดวันนี้ ในขอบเขตที่เลือก — คลิกแล้วเลื่อนไปรายชื่อพร้อมกรองเกินนัด
+function renderDueBadge() {
+  const btn = $('#navDue');
+  if (!btn) return;
+  let overdue = 0, today = 0;
+  if (piiLoaded) for (const { p } of problemPatientsAll) {
+    const d = followupDue(p);
+    if (d === 'overdue') overdue++; else if (d === 'today') today++;
+  }
+  btn.hidden = !(overdue || today);
+  btn.textContent = `⏰ เกินนัด ${overdue.toLocaleString('th-TH')}${today ? ` · วันนี้ ${today.toLocaleString('th-TH')}` : ''}`;
+}
+
 function renderFollowupCoverage() {
   const box = $('#followupCoverageBox');
   if (!box) return;
@@ -1337,6 +1350,7 @@ function renderProblemPatientsTable() {
   const box = $('#problemPatientsBox');
   if (!box) return;
   renderFollowupCoverage();
+  renderDueBadge();
   // รายชื่อรายบุคคลแสดงเฉพาะผู้ที่ล็อกอินแล้ว (สาธารณะเห็นแค่จำนวน/สรุประดับอำเภอ)
   if (!piiLoaded) {
     box.innerHTML = `<p class="note">🔒 รายชื่อผู้ป่วยรายบุคคลแสดงเฉพาะเจ้าหน้าที่ที่เข้าสู่ระบบแล้ว — มีผู้ป่วยเข้าเกณฑ์ต้องติดตาม ${problemPatientsAll.length.toLocaleString('th-TH')} คน (ดูสรุปรายอำเภอได้ในตารางด้านบน)</p>`;
@@ -2379,6 +2393,12 @@ async function init() {
   $('#exportIssuesBtn').addEventListener('click', exportIssuesXlsx);
   $('#exportIssuesBtn2').addEventListener('click', exportIssuesXlsx);
   $('#printWorklistBtn').addEventListener('click', printWorklist);
+  $('#navDue').addEventListener('click', () => {
+    ppOverdueOnly = true; ppVisibleCount = 20;
+    showTab('dashboard');
+    renderProblemPatientsTable();
+    $('#problemPatientsBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   $('#savePopBtn').addEventListener('click', savePopulationFromForm);
   $('#copyPopPrevYearBtn').addEventListener('click', copyPopulationFromPreviousYear);
   $('#publishBtn').addEventListener('click', publishData);
