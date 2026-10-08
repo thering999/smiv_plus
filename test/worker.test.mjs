@@ -14,7 +14,7 @@ import {
   toPublicPayload, validatePublishPayload, scopePatientsForUser, sanitizeUser,
   createLoginThrottle, createWorkerHandler, storageFor,
   PII_CURRENT_KEY, PII_HISTORY_PREFIX, MAX_PATIENTS,
-  AUDIT_PREFIX, writeAudit, readAudit,
+  AUDIT_PREFIX, writeAudit, readAudit, validateFollowupInput,
 } from '../worker/lib.mjs';
 
 // ---------- ตัวช่วย ----------
@@ -504,4 +504,58 @@ test('requireUser: ลบผู้ใช้/เปลี่ยนอำเภอ
 
   env.AUTH_USERS = JSON.stringify(users.filter(u => u.username !== 'muk01'));
   assert.equal((await fetchPd()).status, 401);
+});
+
+
+// ---------- การติดตามผู้ป่วย ----------
+async function followupSetup() {
+  const env = await envWithPasswords();
+  const handler = createWorkerHandler();
+  await env._kv.put(PII_CURRENT_KEY, JSON.stringify({ patients: [
+    patient({ hoscode: '10712', pid: '1', ampur: '01' }),
+    patient({ hoscode: '10712', pid: '2', ampur: '02', cid: '9999999999999' }),
+  ] }));
+  const viewer = (await loginAs(handler, env, 'muk01', 'muk01-pass-1234')).body.token;
+  const admin = (await loginAs(handler, env, 'admin', 'admin-pass-1234')).body.token;
+  const add = (token, body) => handler.fetch(req('/followups', { token, body }), env);
+  const list = (token, qs = '') => handler.fetch(req(`/followups${qs}`, { method: 'GET', token }), env);
+  return { env, add, list, viewer, admin };
+}
+
+test('followup: viewer บันทึก/อ่านได้เฉพาะอำเภอตัวเอง, ampur มาจาก server ไม่ใช่ client', async () => {
+  const { env, add, list, viewer, admin } = await followupSetup();
+  const ok = await add(viewer, { hoscode: '10712', pid: '1', status: 'visited', note: 'เยี่ยมบ้าน', nextDate: '2026-11-01', ampur: '99' });
+  assert.equal(ok.status, 200);
+  assert.ok(env._kv._map.has('followup/01/10712-1'), 'key ต้องใช้อำเภอจากข้อมูล server');
+
+  const cross = await add(viewer, { hoscode: '10712', pid: '2', status: 'visited' });
+  assert.equal(cross.status, 403);
+  assert.equal((await add(viewer, { hoscode: '10712', pid: '404', status: 'visited' })).status, 404);
+  assert.equal((await add(admin, { hoscode: '10712', pid: '2', status: 'phone' })).status, 200);
+
+  const mine = await (await list(viewer)).json();
+  assert.deepEqual(mine.items.map(i => i.pid), ['1']);
+  assert.equal(mine.items[0].nextDate, '2026-11-01');
+  assert.equal(mine.items[0].lastBy, 'muk01');
+  const all = await (await list(admin)).json();
+  assert.equal(all.items.length, 2);
+
+  const detailOther = await (await list(viewer, '?hoscode=10712&pid=2')).json();
+  assert.deepEqual(detailOther.entries, [], 'viewer ห้ามอ่านประวัติคนต่างอำเภอ');
+  const detail = await (await list(viewer, '?hoscode=10712&pid=1')).json();
+  assert.equal(detail.entries[0].note, 'เยี่ยมบ้าน');
+
+  assert.equal((await list(undefined)).status, 401);
+  assert.equal((await add(undefined, { hoscode: '10712', pid: '1', status: 'visited' })).status, 401);
+});
+
+test('validateFollowupInput: ปฏิเสธ status/วันที่/id/บันทึกที่ไม่ถูกต้อง', () => {
+  const now = Date.parse('2026-10-08T00:00:00Z');
+  const base = { hoscode: '10712', pid: '1', status: 'visited' };
+  assert.equal(validateFollowupInput(base, { nowMs: now }).ok, true);
+  assert.equal(validateFollowupInput({ ...base, status: 'x' }, { nowMs: now }).ok, false);
+  assert.equal(validateFollowupInput({ ...base, pid: '../a' }, { nowMs: now }).ok, false);
+  assert.equal(validateFollowupInput({ ...base, nextDate: '2026-13-45' }, { nowMs: now }).ok, false);
+  assert.equal(validateFollowupInput({ ...base, nextDate: '2030-01-01' }, { nowMs: now }).ok, false);
+  assert.equal(validateFollowupInput({ ...base, note: 'x'.repeat(501) }, { nowMs: now }).ok, false);
 });
