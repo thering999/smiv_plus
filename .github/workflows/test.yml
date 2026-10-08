@@ -3,10 +3,18 @@ name: Test calculation engine
 on:
   push:
     branches: [main]
-    paths: ['docs/app.js', 'docs/ui.js', 'test/**', 'package.json']
+    paths:
+      - 'docs/**'
+      - 'test/**'
+      - 'worker/**'
+      - 'package.json'
   pull_request:
     branches: [main]
-    paths: ['docs/app.js', 'docs/ui.js', 'test/**', 'package.json']
+    paths:
+      - 'docs/**'
+      - 'test/**'
+      - 'worker/**'
+      - 'package.json'
 
 jobs:
   test:
@@ -17,3 +25,28 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      - name: ตรวจ syntax ของสคริปต์ฝั่งเว็บและ Worker
+        run: |
+          node --check docs/app.js
+          node --check docs/ui.js
+          node --check worker/lib.mjs
+          node --check worker/hash-password.mjs
+          cp worker/index.js worker/index.syntax-check.mjs
+          node --check worker/index.syntax-check.mjs
+          rm worker/index.syntax-check.mjs
+      - name: ตรวจว่า cache-buster ตรงกัน (index.html v= กับ sw.js CACHE_VERSION/APP_SHELL)
+        run: |
+          node -e "
+          const fs = require('fs');
+          const html = fs.readFileSync('docs/index.html', 'utf8');
+          const sw = fs.readFileSync('docs/sw.js', 'utf8');
+          const versions = new Set([...html.matchAll(/\?v=([0-9a-z]+)/g)].map(m => m[1]));
+          const cache = (sw.match(/CACHE_VERSION = '([^']+)'/) || [])[1];
+          const shell = new Set([...sw.matchAll(/\?v=([0-9a-z]+)/g)].map(m => m[1]));
+          if (versions.size !== 1) { console.error('index.html มี v= หลายค่าไม่ตรงกัน:', [...versions]); process.exit(1); }
+          const v = [...versions][0];
+          if (!cache || !cache.endsWith(v)) { console.error('sw.js CACHE_VERSION ไม่ตรงกับ index.html:', cache, v); process.exit(1); }
+          if (shell.size !== 1 || !shell.has(v)) { console.error('APP_SHELL ใน sw.js ไม่ตรงกับ index.html:', [...shell], v); process.exit(1); }
+          console.log('cache-buster ตรงกันที่ v=' + v);
+          "
+

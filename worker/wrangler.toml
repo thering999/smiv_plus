@@ -1,3 +1,38 @@
 name = "smiv-plus-publish"
 main = "index.js"
 compatibility_date = "2024-09-01"
+workers_dev = true
+
+# ---------------------------------------------------------------------------
+# binding ที่ต้องตั้งค่า (ดูขั้นตอนทั้งหมดใน worker/README.md)
+# ถ้าไม่ตั้งค่า PII_* ระบบจะ "ปฏิเสธการเผยแพร่" แทนที่จะเขียนข้อมูลลง GitHub
+# โดยไม่มีที่เก็บข้อมูลผู้ป่วยตัวจริง (กันข้อมูลจริงหลุดขึ้น repo สาธารณะ)
+# ---------------------------------------------------------------------------
+
+# [vars]
+# ALLOWED_ORIGINS = "https://thering999.github.io"
+
+# ประวัติการนำเข้า/รายการผู้ป่วย: แนะนำ KV สำหรับเริ่มต้น (ฟรี) แล้วค่อยขยับเป็น R2
+# สร้าง: npx wrangler kv namespace create PII_KV   → copy id มาใส่
+# [[kv_namespaces]]
+# binding = "PII_KV"
+# id = "<kv-namespace-id>"
+
+# ทางเลือกที่เหมาะกับข้อมูลผู้ป่วยจริงระยะยาว (เก็บเป็นไฟล์ JSON ในบัคเก็ตส่วนตัว)
+# สร้าง: npx wrangler r2 bucket create smiv-pii
+# [[r2_buckets]]
+# binding = "PII_BUCKET"
+# bucket_name = "smiv-pii"
+
+# throttle การล็อกอิน (นับครั้งผิดต่อ IP/ผู้ใช้ ข้าม instance)
+# สร้าง: npx wrangler kv namespace create LOGIN_KV
+# [[kv_namespaces]]
+# binding = "LOGIN_KV"
+# id = "<kv-namespace-id>"
+
+# secret ที่ต้องตั้ง (ห้ามอยู่ในไฟล์นี้):
+#   npx wrangler secret put GH_TOKEN          # GitHub PAT: Contents read/write ของ repo นี้เท่านั้น
+#   npx wrangler secret put SESSION_SECRET    # สุ่มยาวๆ: node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
+#   npx wrangler secret put AUTH_USERS        # ได้จาก: node worker/hash-password.mjs print
+#   npx wrangler secret put SITE_KEY          # ค่าเดิมใน docs/ui.js (กันบอท)
+

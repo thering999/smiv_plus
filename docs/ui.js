@@ -126,6 +126,12 @@ function renderStoredFileInfo() {
 
 // ---------- Upload ----------
 async function handleUpload(file) {
+  if (!isAdminUser()) {
+    alert('ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ (admin) ก่อนจึงจะนำเข้า/แทนที่ข้อมูลทั้งชุดได้\n(ถ้าต้องการดูรายงานอย่างเดียว ไม่ต้องเข้าสู่ระบบ)');
+    const input = $('#xlsxFile');
+    if (input) input.value = '';
+    return;
+  }
   if (viewingHistory) { await exitHistoryView(); }
   const fileInput = $('#xlsxFile');
   fileInput.disabled = true;
@@ -1285,6 +1291,7 @@ function renderProblemPatientsTable() {
     else if (ppSortKey === 'name') { av = (a.p.name || '') + (a.p.lname || ''); bv = (b.p.name || '') + (b.p.lname || ''); }
     else if (ppSortKey === 'hosname') { av = a.p.hosname || ''; bv = b.p.hosname || ''; }
     else if (ppSortKey === 'ampur') { av = a.p.ampur || ''; bv = b.p.ampur || ''; }
+    else if (ppSortKey === 'cid') { av = a.p.cid || ''; bv = b.p.cid || ''; }
     else { av = a.daysOverdue ?? -1; bv = b.daysOverdue ?? -1; }
     if (av < bv) return ppSortDir === 'asc' ? -1 : 1;
     if (av > bv) return ppSortDir === 'asc' ? 1 : -1;
@@ -1300,6 +1307,9 @@ function renderProblemPatientsTable() {
     <tr>
       <td>${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
       <td>${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
+      ${piiLoaded ? `<td>${p.cid ? `<span title="เลขบัตรประชาชน (ใช้ติดตาม)">${escapeHtml(p.cid)}</span>
+        <button type="button" class="btn btn-outline" data-copy-cid="${escapeHtml(p.cid)}" style="padding:2px 8px;font-size:.8em;margin-left:4px" title="คัดลอกเลขบัตรประชาชน">⧉</button>` : '<span class="note">ไม่มีในข้อมูล</span>'}
+        <div class="note" style="margin:2px 0 0">pid: ${escapeHtml(p.pid || '-')}</div></td>` : '<td class="note">🔒 ปิดบัง</td>'}
       <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
       <td>${escapeHtml(KNOWN_AMPUR[p.ampur] || p.ampur || '')}/${escapeHtml(p.tambon || '-')}</td>
       <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
@@ -1320,7 +1330,7 @@ function renderProblemPatientsTable() {
       <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน</div>
     </div>
     <div class="table-scroll"><table class="report-table">
-    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th></tr></thead>
+    <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'อำเภอ/ตำบล')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th></tr></thead>
     <tbody>${rowsHtml}</tbody></table></div>
     ${filteredCount > ppVisibleCount ? `<button class="btn btn-outline" id="ppShowMoreBtn" style="margin-top:10px">แสดงเพิ่ม (${Math.min(50, filteredCount - ppVisibleCount)} จาก ${filteredCount - ppVisibleCount} ที่เหลือ)</button>` : ''}`;
 
@@ -1338,6 +1348,20 @@ function renderProblemPatientsTable() {
     el.addEventListener('click', sortByThis);
     el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortByThis(); } });
   });
+
+  // ปุ่มคัดลอกเลขบัตรประชาชน (ใช้ตอนติดตามผู้ป่วย — คัดลอกไปวางในระบบ HIS/โทรศัพท์)
+  $$('#problemPatientsBox [data-copy-cid]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const cid = btn.getAttribute('data-copy-cid');
+      try {
+        await navigator.clipboard.writeText(cid);
+        btn.textContent = '✓ คัดลอกแล้ว';
+        setTimeout(() => { btn.textContent = '⧉'; }, 1500);
+      } catch (e) {
+        alert(`คัดลอกอัตโนมัติไม่ได้ (เบราว์เซอร์ไม่อนุญาต) — เลขบัตรประชาชน: ${cid}`);
+      }
+    });
+  });
 }
 
 function exportIssuesXlsx() {
@@ -1353,13 +1377,42 @@ function exportIssuesXlsx() {
   XLSX.writeFile(wb, `smiv_problem_patients_${level}_${fy}.xlsx`);
 }
 
-// ---------- Publish (สร้าง data.json ให้ admin นำไป commit เข้า repo เอง — ไม่ฝัง token ใดๆ) ----------
+// ---------- Publish (ดาวน์โหลดสำเนาสาธารณะไว้ทำเอง — เผื่อ Worker ล่ม; ห้ามมีข้อมูลส่วนบุคคลในไฟล์ที่ดาวน์โหลด) ----------
 function buildPayload() {
   return { patients: state.patients, population: state.population, settings: state.settings, publishedAt: new Date().toISOString() };
 }
 
-function publishData() {
+// ปิดบังข้อมูลส่วนบุคคลฝั่ง client (ใช้เฉพาะเส้นทาง "ดาวน์โหลดเอง" เท่านั้น)
+// เส้นทางปกติ Worker เป็นคนปิดบังเสมอ — ตัวนี้มีไว้กันการเผลอ commit ข้อมูลจริงขึ้น GitHub ด้วยมือ
+const PUBLIC_PATIENT_FIELDS_CLIENT = ['hoscode', 'hosname', 'pid', 'cid', 'name', 'lname', 'birth', 'sex', 'chw_addr', 'tambon', 'ampur', 'first_date_serv', 'date_serv_raw', 'diagcode_raw', 'b03x_raw', 'follow_last', 'fiscal_year_be', 'smiv_code_count', 'has_repeat_violence', 'age_at_fy_end', 'total_visits'];
+function maskNameForPublic(value) {
+  const s = String(value || '').trim();
+  return s ? `${s.slice(0, 1)}***` : '';
+}
+function maskPatientForPublic(patient) {
+  const out = {};
+  for (const field of PUBLIC_PATIENT_FIELDS_CLIENT) {
+    if (field === 'cid') continue;
+    if (field === 'name' || field === 'lname') { out[field] = maskNameForPublic(patient[field]); continue; }
+    if (Object.prototype.hasOwnProperty.call(patient, field)) out[field] = patient[field];
+  }
+  return out;
+}
+function buildPublicPayload() {
   const payload = buildPayload();
+  return {
+    patients: payload.patients.map(maskPatientForPublic),
+    population: payload.population,
+    settings: payload.settings,
+    publishedAt: payload.publishedAt,
+  };
+}
+
+function publishData() {
+  const payload = buildPublicPayload();
+  if (piiLoaded) {
+    if (!confirm('ไฟล์ที่ดาวน์โหลดนี้เป็น "สำเนาสาธารณะ" — ชื่อ-สกุลและเลขบัตรประชาชนถูกปิดบังแล้ว\n(ข้อมูลจริงเผยแพร่ได้ทางปุ่ม 🚀 เผยแพร่ข้อมูล ผ่าน Worker เท่านั้น)\n\nต้องการดาวน์โหลดต่อหรือไม่?')) return;
+  }
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1377,17 +1430,217 @@ function markPublished() {
   if (banner) banner.hidden = true;
 }
 
-// ---------- Publish เข้า GitHub ผ่าน Cloudflare Worker proxy ----------
-// Worker เก็บ GitHub token จริงไว้ฝั่งเซิร์ฟเวอร์ (ไม่เคยส่งมาที่เบราว์เซอร์) เว็บนี้แค่ยิง
-// payload ไปให้ Worker เขียนเข้า GitHub แทน — จึงกดปุ่มแล้วเผยแพร่ได้ทันทีไม่ต้องถาม token เลย
-// SITE_KEY ด้านล่างไม่ใช่ secret จริง (ใครอ่านซอร์สก็เห็นได้) มีไว้กันบอท/คนแปลกหน้ายิง endpoint
-// เล่นๆ เท่านั้น — ต่อให้หลุดไป ผลคือเขียนทับ data.json ได้ (กู้คืนได้จากประวัติ) ไม่ใช่สิทธิ์เข้าถึง GitHub จริง
+// ---------- ยืนยันตัวตน + ข้อมูลผู้ป่วยตัวจริงสำหรับติดตาม ----------
+// ข้อมูลที่ทุกคนเห็นจาก data.json = ข้อมูลที่ปิดบังชื่อ/เลขบัตรแล้ว (สาธารณะ)
+// ข้อมูลจริง (cid 13 หลัก + ชื่อ-สกุลจริง) ดึงจาก Worker หลังล็อกอินเท่านั้น และถูกจำกัดอำเภอตามสิทธิ์
 const PUBLISH_WORKER_URL = 'https://smiv-plus-publish.habusaya.workers.dev';
-const PUBLISH_SITE_KEY = 'gBi6PVlhZA9QuXxcYo1z0CoIOgbczFwc';
+const PUBLISH_SITE_KEY = 'gBi6PVlhZA9QuXxcYo1z0CoIOgbczFwc'; // ไม่ใช่ความลับ: มีไว้กันบอท ไม่ใช่การยืนยันตัวตน
+const AUTH_STORE_KEY = 'smivplus_auth_v2';
 
+let auth = null;        // {token, username, displayName, role, ampur, expiresAt}
+let piiLoaded = false;  // true = state.patients ที่โหลดอยู่เป็นข้อมูลจริง (มี cid เต็ม) จาก Worker
+let realDataNotice = '';
+
+function isAdminUser() { return !!auth && auth.role === 'admin'; }
+function isLoggedIn() { return !!auth && !!auth.token; }
+
+function readStoredAuth() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.token) return null;
+    if (parsed.expiresAt && parsed.expiresAt * 1000 <= Date.now()) return null;
+    return parsed;
+  } catch (e) { return null; }
+}
+
+function saveAuth(next) {
+  auth = next;
+  try {
+    if (next) sessionStorage.setItem(AUTH_STORE_KEY, JSON.stringify(next));
+    else sessionStorage.removeItem(AUTH_STORE_KEY);
+  } catch (e) { /* โหมดส่วนตัว/ปิด storage — ใช้ได้เฉพาะรอบนี้ */ }
+  renderAuthState();
+}
+
+function clearAuth() {
+  piiLoaded = false;
+  saveAuth(null);
+}
+
+function authHeaders() {
+  const headers = { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY };
+  if (isLoggedIn()) headers.Authorization = `Bearer ${auth.token}`;
+  return headers;
+}
+
+function setAuthStatus(message, kind) {
+  const el = document.getElementById('authStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+async function loginToWorker(username, password) {
+  const res = await fetch(`${PUBLISH_WORKER_URL}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+    body: JSON.stringify({ username, password }),
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(result.error || `เข้าสู่ระบบไม่สำเร็จ (${res.status})`);
+  return result;
+}
+
+async function loadRealPatients() {
+  if (!isLoggedIn()) throw new Error('ต้องเข้าสู่ระบบก่อน');
+  const res = await fetch(`${PUBLISH_WORKER_URL}/patient-data`, { method: 'POST', headers: authHeaders(), body: '{}' });
+  const result = await res.json().catch(() => ({}));
+  if (res.status === 401) { clearAuth(); throw new Error(result.error || 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
+  if (!res.ok) throw new Error(result.error || `ดึงข้อมูลไม่สำเร็จ (${res.status})`);
+  return result;
+}
+
+// นำข้อมูลจริง (cid เต็ม) มาใช้กับทั้งหน้าจอ — แทนข้อมูลที่ปิดบังจาก data.json
+function applyRealPatients(result) {
+  if (!result || !Array.isArray(result.patients)) return;
+  state.patients = result.patients;
+  state.population = result.population || state.population;
+  state.settings = { ...state.settings, ...(result.settings || {}) };
+  piiLoaded = true;
+  const scope = result.scope || {};
+  realDataNotice = scope.ampur
+    ? `เห็นเฉพาะอำเภอ ${KNOWN_AMPUR[scope.ampur] || scope.ampur} (${scope.patientCount.toLocaleString('th-TH')} จาก ${scope.totalCount.toLocaleString('th-TH')} คน)`
+    : `เห็นข้อมูลทั้งจังหวัด (${(scope.patientCount || result.patients.length).toLocaleString('th-TH')} คน)`;
+  render();
+  renderAuthState();
+}
+
+function renderAuthState() {
+  const loginBox = document.getElementById('authLoginBox');
+  const banner = document.getElementById('authBanner');
+  const bannerText = document.getElementById('authBannerText');
+  const userLabel = document.getElementById('authUserLabel');
+  if (loginBox) loginBox.hidden = isLoggedIn();
+  if (banner) banner.hidden = !isLoggedIn();
+  if (userLabel && isLoggedIn()) {
+    const roleLabel = auth.role === 'admin' ? 'ผู้ดูแลระบบ (เผยแพร่/ลบได้)' : 'เจ้าหน้าที่ (ดูอย่างเดียว)';
+    userLabel.textContent = `${auth.displayName || auth.username} — ${roleLabel}`;
+  }
+  if (bannerText && isLoggedIn()) {
+    bannerText.textContent = piiLoaded
+      ? `🔓 กำลังแสดงข้อมูลผู้ป่วยตัวจริง (รวมเลขบัตรประชาชน) — ${realDataNotice} · ห้ามคัดลอก/ส่งต่อออกนอกหน่วยงาน`
+      : '🔓 เข้าสู่ระบบแล้ว — กำลังโหลดข้อมูลผู้ป่วยตัวจริง...';
+  }
+  // ปุ่มที่ต้องเป็น admin จะกดไม่ได้ถ้าไม่ได้ล็อกอินเป็น admin (และอธิบายให้ผู้ใช้เข้าใจ)
+  const adminOnly = !isAdminUser();
+  document.body.classList.toggle('viewer-role', adminOnly);
+  ['#publishGithubBtn', '#clearDataBtn', '#savePopBtn', '#saveSettingsBtn'].forEach(sel => {
+    const el = $(sel);
+    if (el) el.disabled = adminOnly;
+  });
+  const uploadEnabled = isAdminUser();
+  const fileInput = $('#xlsxFile');
+  if (fileInput) fileInput.disabled = !uploadEnabled;
+  const problemTitle = document.getElementById('problemPatientsMode');
+  if (problemTitle) {
+    problemTitle.textContent = piiLoaded
+      ? 'ข้อมูลตัวจริงจากระบบ (ใช้ติดตามรายคนได้)'
+      : 'ข้อมูลสาธารณะ — ชื่อ/เลขบัตรถูกปิดบัง (เข้าสู่ระบบเพื่อดูข้อมูลจริงสำหรับติดตาม)';
+  }
+}
+
+async function submitLogin(event) {
+  if (event) event.preventDefault();
+  const usernameEl = document.getElementById('authUsername');
+  const passwordEl = document.getElementById('authPassword');
+  const btn = document.getElementById('authLoginBtn');
+  const username = (usernameEl && usernameEl.value || '').trim();
+  const password = passwordEl ? passwordEl.value : '';
+  if (!username || !password) { setAuthStatus('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error'); return; }
+  if (btn) btn.disabled = true;
+  setAuthStatus('กำลังตรวจสอบ...', '');
+  try {
+    const result = await loginToWorker(username, password);
+    const tokenPayload = JSON.parse(atob(result.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')) || '{}');
+    saveAuth({
+      token: result.token,
+      username: result.user.username,
+      displayName: result.user.displayName,
+      role: result.user.role,
+      ampur: result.user.ampur,
+      expiresAt: tokenPayload.exp,
+    });
+    if (passwordEl) passwordEl.value = '';
+    setAuthStatus('เข้าสู่ระบบสำเร็จ กำลังโหลดข้อมูลผู้ป่วยตัวจริง...', 'ok');
+    const real = await loadRealPatients();
+    applyRealPatients(real);
+    setAuthStatus(`พร้อมใช้งาน — ${realDataNotice}`, 'ok');
+  } catch (e) {
+    setAuthStatus(e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function logoutUser() {
+  clearAuth();
+  piiLoaded = false;
+  setAuthStatus('ออกจากระบบแล้ว — หน้าจอนี้กลับไปแสดงข้อมูลสาธารณะ (ปิดบังชื่อ/เลขบัตร)', 'ok');
+  loadPublished().then(() => { render(); renderAuthState(); });
+}
+
+// ปุ่ม/การรีเฟรชข้อมูลจริง (ทั้งกดเองและรอบอัตโนมัติทุก 5 นาที)
+async function refreshRealPatients(showStatus) {
+  if (!isLoggedIn()) return;
+  try {
+    const real = await loadRealPatients();
+    applyRealPatients(real);
+    if (showStatus) setAuthStatus(`อัปเดตข้อมูลจริงแล้ว — ${realDataNotice}`, 'ok');
+  } catch (e) {
+    setAuthStatus(e.message, 'error');
+  }
+}
+
+// โหลดข้อมูลตามสถานะปัจจุบัน: ล็อกอินอยู่ = ข้อมูลจริงจาก Worker, ไม่ล็อกอิน = สำเนาสาธารณะ (ปิดบังแล้ว)
+async function reloadCurrentSource() {
+  const publishedOk = await loadPublished();
+  if (!publishedOk) loadLocal();
+  if (isLoggedIn()) {
+    try { applyRealPatients(await loadRealPatients()); } catch (e) { /* คงข้อมูลสาธารณะไว้ก่อน */ }
+  }
+  render();
+}
+
+// ---------- publish เข้า GitHub ผ่าน Cloudflare Worker proxy (ต้องล็อกอินเป็น admin) ----------
 let publishInFlight = false;
 let lastPublishAt = 0;
 const PUBLISH_COOLDOWN_MS = 8000;
+
+// ตรวจว่า Worker ที่ deploy อยู่เป็นเวอร์ชันที่มีระบบ "ปิดบังข้อมูลส่วนบุคคลก่อนขึ้น GitHub" แล้วหรือยัง
+// สำคัญมาก: Worker เวอร์ชันเก่า (< 2.0.0) จะเขียนข้อมูลที่ client ส่งไปลง GitHub ตรง ๆ = เลขบัตรประชาชนหลุดสาธารณะ
+async function workerVersion() {
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/health`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => ({}));
+    return body && body.version ? String(body.version) : null;
+  } catch (e) { return null; }
+}
+
+async function requireModernWorker() {
+  const version = await workerVersion();
+  if (!version) {
+    throw new Error('ตรวจสถานะ Worker ไม่ได้ (อาจยังไม่ได้ deploy Worker เวอร์ชันใหม่) — หยุดการเผยแพร่ไว้ก่อนเพื่อกันข้อมูลผู้ป่วยหลุดขึ้น GitHub');
+  }
+  const major = Number(version.split('.')[0]);
+  if (!Number.isFinite(major) || major < 2) {
+    throw new Error(`Worker ที่ deploy อยู่เป็นเวอร์ชัน ${version} (เก่า) — ต้อง deploy Worker เวอร์ชัน 2.0.0 ขึ้นไปก่อนจึงจะเผยแพร่ได้ เพราะเวอร์ชันเก่าไม่มีระบบปิดบังข้อมูลและจะเขียนข้อมูลจริงขึ้น GitHub`);
+  }
+  return version;
+}
+
 
 // ---------- ตรวจคุณภาพข้อมูลก่อนเผยแพร่: รูปแบบ cid + อายุผิดปกติ ----------
 function checkDataQuality(patients) {
@@ -1405,6 +1658,11 @@ function checkDataQuality(patients) {
 async function publishToGithub() {
   const statusEl = document.getElementById('githubPublishStatus');
 
+  if (!isAdminUser()) {
+    statusEl.textContent = '🔒 ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ (admin) ก่อนจึงจะเผยแพร่ได้';
+    statusEl.className = 'status error';
+    return;
+  }
   if (publishInFlight) {
     statusEl.textContent = '⏳ กำลังเผยแพร่รอบก่อนหน้าอยู่ รอสักครู่แล้วลองใหม่';
     statusEl.className = 'status';
@@ -1414,6 +1672,15 @@ async function publishToGithub() {
   if (sinceLast < PUBLISH_COOLDOWN_MS) {
     statusEl.textContent = `⏳ เพิ่งเผยแพร่ไปเมื่อครู่ กรุณารออีก ${Math.ceil((PUBLISH_COOLDOWN_MS - sinceLast) / 1000)} วินาที (กันยิง GitHub API ถี่เกินไป)`;
     statusEl.className = 'status';
+    return;
+  }
+
+  // ด่านกันข้อมูลหลุด: ยืนยันว่า Worker เวอร์ชันใหม่ (ที่เป็นคนปิดบังข้อมูล) พร้อมใช้งานจริงก่อนส่งข้อมูลออกไป
+  try {
+    await requireModernWorker();
+  } catch (err) {
+    statusEl.textContent = '⛔ ' + err.message;
+    statusEl.className = 'status error';
     return;
   }
 
@@ -1455,10 +1722,11 @@ async function publishToGithub() {
     try {
       res = await fetch(PUBLISH_WORKER_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
       result = await res.json().catch(() => ({}));
+      if (res.status === 401) { clearAuth(); throw new Error(result.error || 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
       if (!res.ok) throw new Error(result.error || `เผยแพร่ไม่สำเร็จ (${res.status})`);
     } catch (firstErr) {
       // เน็ตหลุด/ค้างชั่วคราว — ลองใหม่อัตโนมัติ 1 ครั้งก่อนแจ้งว่าล้มเหลวจริง
@@ -1466,7 +1734,7 @@ async function publishToGithub() {
       await new Promise(r => setTimeout(r, 3000));
       res = await fetch(PUBLISH_WORKER_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
       result = await res.json().catch(() => ({}));
@@ -1476,7 +1744,7 @@ async function publishToGithub() {
     markPublished();
     lastPublishedCount = payload.patients.length;
     lastPublishAt = Date.now();
-    statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ทุกคนจะเห็นข้อมูลใหม่ภายใน ~1 นาที`;
+    statusEl.textContent = `✅ เผยแพร่สำเร็จ (${result.patientCount || payload.patients.length} คน) — ข้อมูลสาธารณะถูกปิดบังชื่อ/เลขบัตรแล้ว และข้อมูลจริงถูกเก็บไว้ให้ผู้ที่ล็อกอินดูได้ภายใน ~1 นาที`;
     statusEl.className = 'status ok';
   } catch (err) {
     statusEl.innerHTML = '';
@@ -1503,7 +1771,7 @@ async function loadHistoryList() {
     if (!res.ok) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
     const list = await res.json();
     if (!list.length) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
-    const isAdmin = sessionStorage.getItem('smiv_gate_role') !== 'viewer';
+    const isAdmin = isAdminUser();
     const rows = list.slice().reverse().map(item => `
       <tr>
         <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
@@ -1537,13 +1805,124 @@ function setHistoryButtonsDisabled(disabled) {
   if (box) box.querySelectorAll('button').forEach(b => b.disabled = disabled);
 }
 
+// ---------- ประวัติข้อมูลจริง (เก็บในพื้นที่ส่วนตัว ต้องเป็น admin + ล็อกอินแล้ว) ----------
+async function loadPrivateHistoryList() {
+  const box = document.getElementById('privateHistoryBox');
+  if (!box) return;
+  if (!isAdminUser()) { box.innerHTML = '<p class="note">🔒 ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบก่อน</p>'; return; }
+  box.innerHTML = '<p class="note">กำลังโหลด...</p>';
+  try {
+    const res = await fetch(PUBLISH_WORKER_URL, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ action: 'full_history' }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (res.status === 401) { clearAuth(); throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
+    if (!res.ok) throw new Error(result.error || `โหลดไม่สำเร็จ (${res.status})`);
+    const items = Array.isArray(result.items) ? result.items.slice().reverse() : [];
+    if (!items.length) { box.innerHTML = '<p class="note">ยังไม่มีประวัติข้อมูลจริง</p>'; return; }
+    box.innerHTML = `<p class="note">เก็บประวัติข้อมูลจริงไว้ให้กู้คืนกรณีกดเผยแพร่ผิดพลาด (เก็บบนพื้นที่ส่วนตัว ไม่ได้อยู่บน GitHub)</p>
+      <div class="table-scroll"><table class="report-table">
+      <thead><tr><th>เวลาข้อมูล</th><th>จำนวนผู้ป่วย</th><th></th></tr></thead>
+      <tbody>${items.map(item => `<tr>
+        <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
+        <td>${Number(item.patientCount || 0).toLocaleString('th-TH')}</td>
+        <td><button class="btn btn-outline" data-private-restore="${escapeHtml(item.file)}">↩️ กู้คืนข้อมูลจริงชุดนี้</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+    box.querySelectorAll('[data-private-restore]').forEach(btn => {
+      btn.addEventListener('click', () => restorePrivateHistory(btn.getAttribute('data-private-restore')));
+    });
+  } catch (e) {
+    box.innerHTML = `<p class="note">โหลดประวัติข้อมูลจริงไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ---------- บันทึกการเข้าถึงข้อมูล (audit log, PDPA) — เฉพาะ admin ----------
+const AUDIT_ACTION_LABELS = {
+  login: 'เข้าสู่ระบบ', 'patient-data': 'เปิดดูข้อมูลจริง', publish: 'เผยแพร่', restore: 'กู้คืนข้อมูลจริง',
+};
+let auditItems = [];
+
+function renderAuditRows() {
+  const tbody = document.getElementById('auditRows');
+  if (!tbody) return;
+  const userQ = (document.getElementById('auditUserFilter')?.value || '').trim().toLowerCase();
+  const action = document.getElementById('auditActionFilter')?.value || '';
+  const rows = auditItems.filter(i =>
+    (!action || i.action === action) && (!userQ || String(i.username || '').toLowerCase().includes(userQ)));
+  const count = document.getElementById('auditCount');
+  if (count) count.textContent = `${rows.length.toLocaleString('th-TH')} / ${auditItems.length.toLocaleString('th-TH')} รายการ`;
+  tbody.innerHTML = rows.length ? rows.map(i => `<tr${i.ok === false ? ' class="audit-fail"' : ''}>
+    <td>${escapeHtml(new Date(i.at).toLocaleString('th-TH'))}</td>
+    <td>${escapeHtml(i.username || '-')}</td>
+    <td>${escapeHtml(AUDIT_ACTION_LABELS[i.action] || i.action || '-')}${i.ok === false ? ' ❌ ไม่สำเร็จ' : ''}</td>
+    <td>${escapeHtml(i.ampur || (i.role === 'admin' ? 'ทุกอำเภอ' : '-'))}</td>
+    <td>${i.count != null ? Number(i.count).toLocaleString('th-TH') : '-'}</td>
+    <td>${escapeHtml(i.ip || '-')}</td>
+  </tr>`).join('') : '<tr><td colspan="6">ไม่พบรายการ</td></tr>';
+}
+
+async function loadAuditLog() {
+  const box = document.getElementById('auditBox');
+  if (!box) return;
+  if (!isAdminUser()) { box.innerHTML = ''; return; }
+  const days = document.getElementById('auditDays')?.value || '7';
+  box.innerHTML = '<p class="note">กำลังโหลดบันทึกการเข้าถึงข้อมูล...</p>';
+  try {
+    const res = await fetch(`${PUBLISH_WORKER_URL}/audit?days=${encodeURIComponent(days)}`, { headers: authHeaders(), cache: 'no-store' });
+    const result = await res.json().catch(() => ({}));
+    if (res.status === 401) { clearAuth(); throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
+    if (!res.ok) throw new Error(result.error || `โหลดไม่สำเร็จ (${res.status})`);
+    auditItems = Array.isArray(result.items) ? result.items : [];
+    box.innerHTML = `<h3>🛡️ บันทึกการเข้าถึงข้อมูล (PDPA)</h3>
+      <p class="note">ใครเข้าสู่ระบบ / เปิดดูข้อมูลจริง / เผยแพร่ เมื่อไร (ไม่มีเลขบัตรหรือชื่อผู้ป่วยใน log)</p>
+      <div class="filter-bar">
+        <div><label for="auditDays">ช่วงเวลา</label><select id="auditDays">
+          ${[1, 7, 31].map(d => `<option value="${d}"${String(d) === days ? ' selected' : ''}>${d} วันล่าสุด</option>`).join('')}
+        </select></div>
+        <div><label for="auditActionFilter">การกระทำ</label><select id="auditActionFilter"><option value="">ทั้งหมด</option>
+          ${Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+        </select></div>
+        <div><label for="auditUserFilter">ผู้ใช้</label><input id="auditUserFilter" type="search" placeholder="ค้นหาชื่อผู้ใช้"></div>
+        <div><span id="auditCount" class="note"></span></div>
+      </div>
+      <div class="table-scroll"><table class="report-table">
+        <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>อำเภอ</th><th>จำนวนแถว</th><th>IP</th></tr></thead>
+        <tbody id="auditRows"></tbody></table></div>`;
+    document.getElementById('auditDays').addEventListener('change', loadAuditLog);
+    document.getElementById('auditActionFilter').addEventListener('change', renderAuditRows);
+    document.getElementById('auditUserFilter').addEventListener('input', renderAuditRows);
+    renderAuditRows();
+  } catch (e) {
+    box.innerHTML = `<p class="note">โหลดบันทึกการเข้าถึงข้อมูลไม่สำเร็จ: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function restorePrivateHistory(file) {
+  if (!confirm(`กู้คืนข้อมูลจริงจาก ${new Date().toISOString().slice(0, 10)}?\nระบบจะตั้งข้อมูลชุดนี้เป็นข้อมูลปัจจุบัน (ข้อมูลจริง + สำเนาสาธารณะที่ปิดบังแล้ว)`)) return;
+  try {
+    const res = await fetch(PUBLISH_WORKER_URL, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ action: 'restore_full_history', file }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || `กู้คืนไม่สำเร็จ (${res.status})`);
+    setStatus(`กู้คืนข้อมูลจริงแล้ว (${result.patientCount} คน)`, 'ok');
+    await loadRealPatients().then(applyRealPatients).catch(() => {});
+    loadPrivateHistoryList();
+  } catch (e) {
+    alert('กู้คืนไม่สำเร็จ: ' + e.message);
+  }
+}
+
+
 async function deleteHistorySnapshot(file) {
   if (!confirm(`ลบรายการประวัตินี้ถาวร? (ไฟล์ไม่สามารถกู้คืนได้อีก)\n${file}`)) return;
   setHistoryButtonsDisabled(true);
   try {
     const res = await fetch(PUBLISH_WORKER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Site-Key': PUBLISH_SITE_KEY },
+      headers: authHeaders(),
       body: JSON.stringify({ action: 'delete_history', file }),
     });
     const result = await res.json().catch(() => ({}));
@@ -1604,9 +1983,7 @@ async function restoreHistorySnapshot(file) {
 async function exitHistoryView() {
   viewingHistory = false;
   document.getElementById('historyViewBanner').hidden = true;
-  const publishedOk = await loadPublished();
-  if (!publishedOk) loadLocal();
-  render();
+  await reloadCurrentSource();
 }
 
 function clearAllData() {
@@ -1633,6 +2010,22 @@ async function init() {
   renderPopulationEditor();
   renderSettingsEditor();
   renderStoredFileInfo();
+
+  // ยืนยันตัวตน: ฟอร์มล็อกอิน + กู้เซสชันเดิม (token อายุ 8 ชม. — เก็บใน sessionStorage ของแท็บนี้เท่านั้น)
+  const loginForm = $('#authLoginForm');
+  if (loginForm) loginForm.addEventListener('submit', submitLogin);
+  const logoutBtn = $('#authLogoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', e => { e.preventDefault(); logoutUser(); });
+  const reloadRealBtn = $('#authReloadBtn');
+  if (reloadRealBtn) reloadRealBtn.addEventListener('click', e => { e.preventDefault(); refreshRealPatients(true); });
+  auth = readStoredAuth();
+  renderAuthState();
+  if (isLoggedIn()) {
+    setAuthStatus('พบเซสชันเดิม กำลังโหลดข้อมูลผู้ป่วยตัวจริง...', '');
+    loadRealPatients()
+      .then(real => { applyRealPatients(real); setAuthStatus(`พร้อมใช้งาน — ${realDataNotice}`, 'ok'); })
+      .catch(err => setAuthStatus(err.message, 'error'));
+  }
 
   window.addEventListener('beforeunload', e => {
     if (unpublishedChanges) { e.preventDefault(); e.returnValue = ''; }
@@ -1709,7 +2102,7 @@ async function init() {
   $('#toggleHistoryPanel').addEventListener('click', () => {
     const panel = $('#historyPanel');
     panel.hidden = !panel.hidden;
-    if (!panel.hidden) loadHistoryList();
+    if (!panel.hidden) { loadHistoryList(); loadPrivateHistoryList(); loadAuditLog(); }
   });
   $('#exitHistoryViewBtn').addEventListener('click', e => { e.preventDefault(); exitHistoryView(); });
   $('#riskAlertViewLink').addEventListener('click', e => {
@@ -1724,6 +2117,7 @@ async function init() {
   // ข้ามถ้ากำลังดูประวัติย้อนหลังอยู่ หรือมีการแก้ไขที่ยังไม่ได้เผยแพร่ (กันข้อมูลที่กำลังแก้อยู่หาย)
   setInterval(async () => {
     if (viewingHistory || unpublishedChanges) return;
+    if (isLoggedIn()) { await refreshRealPatients(false); return; }
     const prevPublishedAt = state.patients.length ? $('#publishedAt').textContent : '';
     const ok = await loadPublished();
     if (ok && $('#publishedAt').textContent !== prevPublishedAt) render();

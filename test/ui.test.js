@@ -128,3 +128,104 @@ function mkPatient(overrides = {}) {
     ...overrides,
   };
 }
+
+test('buildPublicPayload: ไฟล์ที่ดาวน์โหลดเอง (เส้นทาง manual) ต้องปิดบัง cid/ชื่อ-สกุลด้วย', () => {
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: '1', cid: '1234567890123', name: 'สมชาย', lname: 'ใจดี' })];
+  sandbox.window.smivEngine.state.population = {};
+  const payload = sandbox.buildPublicPayload();
+  const text = JSON.stringify(payload);
+  assert.ok(!text.includes('1234567890123'), 'ห้ามมี cid เต็มในไฟล์ที่ดาวน์โหลด');
+  assert.ok(!/\d{13}/.test(text), 'ห้ามมีตัวเลข 13 หลักในไฟล์ที่ดาวน์โหลด');
+  assert.equal(payload.patients[0].name, 'ส***');
+  assert.equal(payload.patients[0].lname, 'ใ***');
+  assert.equal('cid' in payload.patients[0], false);
+  assert.equal(payload.patients[0].pid, '1', 'ฟิลด์อื่นต้องยังอยู่ครบเพื่อให้รายงานสาธารณะใช้งานได้');
+});
+
+
+
+// ---------- โหมดข้อมูลจริง / สิทธิ์ผู้ใช้ (ตรวจผ่าน UI จริงของ ui.js) ----------
+test('saveAuth (admin): ซ่อนการ์ดล็อกอิน แสดงแบนเนอร์โหมดข้อมูลจริง และเปิดปุ่มเผยแพร่', () => {
+  sandbox.saveAuth({ token: 'v1.a.b', username: 'admin', displayName: 'ผู้ดูแลระบบ', role: 'admin', ampur: null, expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  assert.equal(sandbox.document.getElementById('authBanner').hidden, false);
+  assert.equal(sandbox.document.getElementById('authLoginBox').hidden, true);
+  assert.equal(sandbox.document.getElementById('publishGithubBtn').disabled, false);
+  assert.equal(sandbox.document.body.classList.contains('viewer-role'), false);
+  assert.match(sandbox.document.getElementById('authUserLabel').textContent, /ผู้ดูแลระบบ/);
+});
+
+test('saveAuth (viewer จำกัดอำเภอ): ปิดปุ่มที่ต้องใช้สิทธิ์ admin + ขึ้นแถบโหมดดูอย่างเดียว', () => {
+  sandbox.saveAuth({ token: 'v1.a.b', username: 'muk01', displayName: 'เจ้าหน้าที่อำเภอเมือง', role: 'viewer', ampur: '01', expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  assert.equal(sandbox.document.getElementById('publishGithubBtn').disabled, true);
+  assert.equal(sandbox.document.getElementById('xlsxFile').disabled, true);
+  assert.equal(sandbox.document.body.classList.contains('viewer-role'), true);
+  assert.equal(sandbox.document.getElementById('authBanner').hidden, false);
+});
+
+test('clearAuth: กลับสู่โหมดสาธารณะ (แสดงการ์ดล็อกอิน + ปิดปุ่มเผยแพร่)', () => {
+  sandbox.saveAuth({ token: 'v1.a.b', username: 'admin', displayName: 'ผู้ดูแลระบบ', role: 'admin', ampur: null, expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  sandbox.clearAuth();
+  assert.equal(sandbox.document.getElementById('authLoginBox').hidden, false);
+  assert.equal(sandbox.document.getElementById('authBanner').hidden, true);
+  assert.equal(sandbox.document.getElementById('publishGithubBtn').disabled, true);
+  assert.equal(sandbox.localStorage.getItem('smivplus_auth_v2'), null);
+});
+
+test('applyRealPatients: สลับไปใช้ข้อมูลจริง (cid เต็ม) และตารางที่ต้องติดตามแสดงเลขบัตรประชาชน + ปุ่มคัดลอก', () => {
+  sandbox.window.smivEngine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  sandbox.applyRealPatients({
+    patients: [mkPatient({ pid: 'P1', cid: '1234567890123', name: 'สมชาย', lname: 'ใจดี', ampur: '01', fiscal_year_be: 2569, follow_last: null })],
+    population: {}, settings: {}, publishedAt: '2026-09-29T00:00:00.000Z',
+    scope: { username: 'admin', displayName: 'ผู้ดูแลระบบ', role: 'admin', ampur: null, patientCount: 1, totalCount: 1 },
+  });
+  assert.equal(sandbox.window.smivEngine.state.patients[0].cid, '1234567890123');
+  const boxHtml = sandbox.document.querySelector('#problemPatientsBox').innerHTML;
+  assert.ok(boxHtml.includes('1234567890123'), 'ตารางต้องแสดงเลขบัตรประชาชนเพื่อใช้ติดตาม');
+  assert.ok(boxHtml.includes('data-copy-cid="1234567890123"'), 'ต้องมีปุ่มคัดลอกเลขบัตรประชาชน');
+});
+
+test('applyRealPatients: ข้อมูลสาธารณะ (ยังไม่ล็อกอิน) ต้องไม่แสดงเลขบัตรประชาชนในตาราง', () => {
+  sandbox.window.smivEngine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: 'P1', cid: '', name: 'ส***', lname: 'ใ***', fiscal_year_be: 2569, follow_last: null })];
+  sandbox.render();
+  const boxHtml = sandbox.document.querySelector('#problemPatientsBox').innerHTML;
+  assert.ok(boxHtml.includes('🔒 ปิดบัง'), 'โหมดสาธารณะต้องขึ้นว่าข้อมูลถูกปิดบัง');
+  assert.ok(!boxHtml.includes('data-copy-cid'), 'โหมดสาธารณะต้องไม่มีปุ่มคัดลอกเลขบัตร');
+});
+
+test('publishToGithub: ยังไม่ล็อกอินเป็น admin → ไม่ยิง network เลย และแจ้งให้เข้าสู่ระบบ', async () => {
+  await sandbox.publishToGithub();
+  assert.equal(sandbox.fetchCalls.length, 0, 'ต้องไม่ยิงไปที่ Worker เลยถ้าไม่ได้ล็อกอิน');
+  assert.match(sandbox.document.getElementById('githubPublishStatus').textContent, /เข้าสู่ระบบ/);
+});
+
+test('publishToGithub (admin): ส่ง Authorization: Bearer token ไปกับ payload และรายงานผลสำเร็จ', async () => {
+  sandbox.saveAuth({ token: 'v1.token.sig', username: 'admin', displayName: 'ผู้ดูแลระบบ', role: 'admin', ampur: null, expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: 'P1', cid: '1234567890123' })];
+  const calls = [];
+  sandbox.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).includes('/health')) return { ok: true, status: 200, json: async () => ({ ok: true, version: '2.0.0' }) };
+    return { ok: true, status: 200, json: async () => ({ ok: true, patientCount: 1 }) };
+  };
+  await sandbox.publishToGithub();
+  assert.equal(calls.length, 2, 'ต้องยิง /health เพื่อตรวจเวอร์ชัน Worker ก่อน แล้วจึงยิง publish');
+  const publishCall = calls.find(c => !c.url.includes('/health'));
+  assert.match(publishCall.url, /smiv-plus-publish/);
+  assert.equal(publishCall.init.headers.Authorization, 'Bearer v1.token.sig', 'ต้องแนบ token ไปด้วย ไม่งั้น Worker จะปฏิเสธ');
+  assert.ok(JSON.parse(publishCall.init.body).patients[0].cid === '1234567890123', 'ผู้ที่ล็อกอินเป็น admin ส่งข้อมูลจริงให้ Worker (Worker เป็นคนปิดบังก่อนขึ้น GitHub)');
+  assert.match(sandbox.document.getElementById('githubPublishStatus').textContent, /เผยแพร่สำเร็จ|ปิดบัง/);
+});
+
+test('publishToGithub: ถ้า Worker ที่ deploy ยังเป็นเวอร์ชันเก่า (<2.0.0) ต้องปฏิเสธการเผยแพร่ (กันข้อมูลจริงหลุดขึ้น GitHub)', async () => {
+  sandbox.saveAuth({ token: 'v1.token.sig', username: 'admin', displayName: 'ผู้ดูแลระบบ', role: 'admin', ampur: null, expiresAt: Math.floor(Date.now() / 1000) + 3600 });
+  sandbox.window.smivEngine.state.patients = [mkPatient({ pid: 'P1', cid: '1234567890123' })];
+  const calls = [];
+  sandbox.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return { ok: true, status: 200, json: async () => ({ ok: true, version: '1.4.0' }) };
+  };
+  await sandbox.publishToGithub();
+  assert.equal(calls.filter(c => !c.url.includes('/health')).length, 0, 'ต้องไม่ส่งข้อมูลผู้ป่วยไปเลยถ้า Worker เก่า');
+  assert.match(sandbox.document.getElementById('githubPublishStatus').textContent, /เวอร์ชันเก่า|ต้อง deploy/);
+});

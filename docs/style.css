@@ -12,11 +12,8 @@ header.topbar .brand small{display:block;font-weight:400;font-size:.6em;opacity:
 .nav-btn:hover{background:rgba(255,255,255,.15)}
 a.nav-btn{text-decoration:none;display:inline-block}
 .nav-btn.active{background:#fff;color:var(--primary);font-weight:600}
-.gate-overlay{position:fixed;inset:0;background:linear-gradient(135deg,var(--primary),var(--primary-dark));display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
-.gate-box{background:#fff;padding:32px;border-radius:16px;max-width:380px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,.4)}
-.gate-box h2{margin:0 0 8px;text-align:center;border:none;padding:0;color:var(--text)}
-.gate-box input{width:100%;padding:11px;border:1px solid var(--border);border-radius:8px;margin-top:10px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
-.gate-box input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(44,110,145,.15)}
+/* หมายเหตุ: ด่านรหัสผ่านเดิม (.gate-overlay/.gate-box) ถูกแทนที่ด้วยการ์ดเข้าสู่ระบบจริง #authLoginBox ตั้งแต่ v2.0.0
+   (การยืนยันตัวตนทำที่ Cloudflare Worker — ไม่มีรหัสผ่านฝังในหน้าเว็บอีกแล้ว) */
 main{padding:20px;max-width:1400px;margin:0 auto}
 h1{font-size:1.4em;font-weight:600;letter-spacing:.2px}
 h2{color:var(--primary-dark);font-weight:700;margin:36px 0 14px;padding-left:12px;border-left:5px solid;border-image:linear-gradient(180deg,var(--primary-light),var(--primary-dark)) 1;font-size:1.15em}
@@ -97,7 +94,6 @@ footer{text-align:center;color:#6b7280;font-size:.85em;padding:28px 20px}
   .chart-box[style*="grid-column"]{grid-column:auto}
   table.report-table{font-size:.78em}
   table.report-table th,table.report-table td{padding:4px 6px}
-  .gate-box{padding:20px}
 }
 
 /* โหมดดูอย่างเดียว (viewer role) — ซ่อนทุกอย่างที่แก้ไข/เผยแพร่/ลบข้อมูลได้ */
@@ -114,7 +110,7 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
 
 @media print{
   @page{margin:12mm}
-  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#gateOverlay,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,#lowEAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
+  header.topbar,.nav,.filter-bar,#importCard,#publishHelper,#authBanner,#authLoginBox,#unpublishedBanner,#historyViewBanner,#riskAlertBanner,#lowEAlertBanner,.btn,.chart-download-btn,footer{display:none !important}
   body{background:#fff}
   main{padding:0;max-width:100%}
   h2{page-break-after:avoid;break-after:avoid}
@@ -144,3 +140,5 @@ body.printing-exec-summary #execSummaryPrint{display:block !important}
 .scope-card-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .scope-card-meta span{background:rgba(255,255,255,.2);border-radius:999px;padding:3px 10px;font-size:.8em}
 @media print{.scope-card{box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+.audit-fail td { color: #b42318; }
