@@ -16,7 +16,7 @@ export const WORKER_VERSION = '2.0.0';
 export const MAX_PATIENTS = 20000;                 // เพดานจำนวนผู้ป่วยต่อครั้งที่เผยแพร่
 export const MAX_PAYLOAD_BYTES = 8 * 1024 * 1024;  // เพดานขนาด payload กันการยิงขยะเข้า GitHub API
 export const TOKEN_TTL_SECONDS = 8 * 60 * 60;      // อายุ token 8 ชั่วโมง (1 วันทำงาน)
-export const PBKDF2_ITERATIONS = 150000;
+export const PBKDF2_ITERATIONS = 100000; // เพดานของ WebCrypto บน Cloudflare Workers (เกินนี้ deriveBits โยน error)
 export const LOGIN_MAX_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_SECONDS = 15 * 60;
 
@@ -103,7 +103,7 @@ export async function verifyPassword(password, stored) {
   const parts = String(stored || '').split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2-sha256') return false;
   const iterations = Number(parts[1]);
-  if (!Number.isFinite(iterations) || iterations < 1000) return false;
+  if (!Number.isFinite(iterations) || iterations < 1000 || iterations > PBKDF2_ITERATIONS) return false;
   const candidate = await hashPassword(password, { iterations, salt: parts[2] });
   return timingSafeEqualStr(candidate.split('$')[3], parts[3]);
 }
@@ -608,7 +608,10 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     let users;
     try { users = parseAuthUsers(env.AUTH_USERS); } catch (err) { return json(request, env, { error: err.message }, 500); }
     const record = users.find(u => String(u.username).toLowerCase() === username.toLowerCase());
-    const passwordOk = record ? await verifyPassword(password, record.password_hash) : false;
+    // ไม่มีผู้ใช้นี้ก็ยังคำนวณ PBKDF2 เท่ากัน (hash หลอก) เพื่อไม่ให้วัดเวลาเดาได้ว่ามีชื่อผู้ใช้นี้หรือไม่
+    const passwordOk = record
+      ? await verifyPassword(password, record.password_hash)
+      : (await hashPassword(password), false);
 
     if (!passwordOk) {
       // ยังคำนวณ PBKDF2 ไปแล้วเท่ากันทั้งกรณีมี/ไม่มีผู้ใช้ เพื่อไม่ให้วัดเวลาเดาได้ว่ามีชื่อผู้ใช้นี้หรือไม่
