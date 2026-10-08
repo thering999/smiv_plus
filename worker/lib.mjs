@@ -141,6 +141,8 @@ export function toPublicPatient(patient) {
   for (const field of PUBLIC_PATIENT_FIELDS) {
     if (field === 'cid') continue; // ไม่เผยแพร่แม้แต่แบบปิดบางส่วน — ผู้ที่ต้องใช้ติดตามดูจากระบบที่ล็อกอิน
     if (field === 'name' || field === 'lname') { out[field] = maskName(patient[field]); continue; }
+    // วันเกิดเต็ม + ตำบล + เพศ ระบุตัวบุคคลได้ → สาธารณะเห็นแค่ปีเกิด (หน้าเว็บใช้ birth แค่เช็คว่ามีค่า; อายุใช้ age_at_fy_end)
+    if (field === 'birth') { if (patient.birth) out.birth = String(patient.birth).slice(0, 4); continue; }
     if (Object.prototype.hasOwnProperty.call(patient, field)) out[field] = patient[field];
   }
   return out;

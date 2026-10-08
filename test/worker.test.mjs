@@ -602,3 +602,9 @@ test('notify-overdue + cron: ส่ง LINE ต่ออำเภอ/จัง�
   assert.ok(text.includes('เกินวันนัดติดตาม 1 คน'));
   assert.ok(!text.includes('1234567890123') && !text.includes('สมชาย') && !text.includes('ใจดี'), 'LINE ต้องไม่มี PII');
 });
+
+test('toPublicPatient: วันเกิดสาธารณะเหลือแค่ปี', () => {
+  const out = toPublicPayload({ patients: [patient({ birth: '1988-04-09' })] }).patients[0];
+  assert.equal(out.birth, '1988');
+  assert.equal('cid' in out, false);
+});

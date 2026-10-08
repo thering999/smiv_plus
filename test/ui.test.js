@@ -184,12 +184,13 @@ test('applyRealPatients: สลับไปใช้ข้อมูลจริ�
   assert.ok(boxHtml.includes('data-copy-cid="1234567890123"'), 'ต้องมีปุ่มคัดลอกเลขบัตรประชาชน');
 });
 
-test('applyRealPatients: ข้อมูลสาธารณะ (ยังไม่ล็อกอิน) ต้องไม่แสดงเลขบัตรประชาชนในตาราง', () => {
+test('ยังไม่ล็อกอิน: ไม่แสดงรายชื่อรายบุคคลเลย (แม้แบบปิดบัง) และไม่มีปุ่มคัดลอกเลขบัตร', () => {
   sandbox.window.smivEngine.state.settings = { smi_prevalence_pct: 4.37, smiv_ratio_pct: 11.92, max_age_included: 60, current_fiscal_year_be: 2569 };
   sandbox.window.smivEngine.state.patients = [mkPatient({ pid: 'P1', cid: '', name: 'ส***', lname: 'ใ***', fiscal_year_be: 2569, follow_last: null })];
   sandbox.render();
   const boxHtml = sandbox.document.querySelector('#problemPatientsBox').innerHTML;
-  assert.ok(boxHtml.includes('🔒 ปิดบัง'), 'โหมดสาธารณะต้องขึ้นว่าข้อมูลถูกปิดบัง');
+  assert.ok(boxHtml.includes('เฉพาะเจ้าหน้าที่ที่เข้าสู่ระบบ'), 'โหมดสาธารณะต้องบอกให้เข้าสู่ระบบ');
+  assert.ok(!boxHtml.includes('ส***') && !boxHtml.includes('<table'), 'โหมดสาธารณะต้องไม่มีตารางรายชื่อ');
   assert.ok(!boxHtml.includes('data-copy-cid'), 'โหมดสาธารณะต้องไม่มีปุ่มคัดลอกเลขบัตร');
 });
 

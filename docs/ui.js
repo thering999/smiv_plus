@@ -1311,6 +1311,11 @@ function renderProblemPatientsTable() {
   const box = $('#problemPatientsBox');
   if (!box) return;
   renderFollowupCoverage();
+  // รายชื่อรายบุคคลแสดงเฉพาะผู้ที่ล็อกอินแล้ว (สาธารณะเห็นแค่จำนวน/สรุประดับอำเภอ)
+  if (!piiLoaded) {
+    box.innerHTML = `<p class="note">🔒 รายชื่อผู้ป่วยรายบุคคลแสดงเฉพาะเจ้าหน้าที่ที่เข้าสู่ระบบแล้ว — มีผู้ป่วยเข้าเกณฑ์ต้องติดตาม ${problemPatientsAll.length.toLocaleString('th-TH')} คน (ดูสรุปรายอำเภอได้ในตารางด้านบน)</p>`;
+    return;
+  }
   if (!problemPatientsAll.length) {
     box.innerHTML = '<p class="note">ไม่พบผู้ป่วยที่เข้าเกณฑ์ต้องติดตาม/แก้ไขข้อมูลในเงื่อนไขปัจจุบัน</p>';
     return;
@@ -1714,6 +1719,10 @@ function renderAuthState() {
   ['#publishGithubBtn', '#clearDataBtn', '#savePopBtn', '#saveSettingsBtn'].forEach(sel => {
     const el = $(sel);
     if (el) el.disabled = adminOnly;
+  });
+  ['#exportIssuesBtn', '#exportIssuesBtn2'].forEach(sel => {
+    const el = $(sel);
+    if (el) { el.disabled = !piiLoaded; el.title = piiLoaded ? '' : 'ต้องเข้าสู่ระบบก่อน'; }
   });
   const uploadEnabled = isAdminUser();
   const fileInput = $('#xlsxFile');
