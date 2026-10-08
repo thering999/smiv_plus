@@ -2271,7 +2271,6 @@ async function exitHistoryView() {
   viewingHistory = false;
   document.getElementById('historyViewBanner').hidden = true;
   await reloadCurrentSource();
-  loadGeoNames().then(names => { if (names) renderProblemPatientsTable(); });
 }
 
 function clearAllData() {
@@ -2290,6 +2289,7 @@ function clearAllData() {
 
 // ---------- init ----------
 async function init() {
+  loadGeoNames().then(names => { if (names) renderProblemPatientsTable(); });
   const publishedOk = await loadPublished();
   if (!publishedOk) loadLocal();
   applyUrlToControls();
