@@ -1419,8 +1419,15 @@ function exportIssuesXlsx() {
   const areaFilter = $('#areaSelect').value;
   const rows = buildProblemPatients(fy, level, areaFilter);
 
-  const cols = ['hoscode','hosname','pid','cid','name','lname','birth','sex','chw_addr','tambon','ampur','first_date_serv','date_serv','diagcode','b03x','follow_last','จำนวนรหัสSMIV','ครั้งที่มารับบริการ','ค้างติดตาม(วัน)','ความสำคัญ','ปัญหาที่พบ','คำแนะนำ'];
-  const data = rows.map(({ p, issues, priority, recommendations, daysOverdue }) => [p.hoscode,p.hosname,p.pid,p.cid,p.name,p.lname,p.birth,p.sex,p.chw_addr,p.tambon,p.ampur,p.first_date_serv,p.date_serv_raw,p.diagcode_raw,p.b03x_raw,p.follow_last||'NULL',p.smiv_code_count,p.total_visits,daysOverdue===null?'':daysOverdue,priority,issues.join('; '),recommendations]);
+  const cols = ['hoscode','hosname','pid','cid','name','lname','birth','sex','chw_addr','tambon','ampur','first_date_serv','date_serv','diagcode','b03x','follow_last','จำนวนรหัสSMIV','ครั้งที่มารับบริการ','ค้างติดตาม(วัน)','ความสำคัญ','ปัญหาที่พบ','คำแนะนำ','สถานะติดตามล่าสุด','วันที่ติดตามล่าสุด','ผู้บันทึก','วันนัดถัดไป','เกินนัด'];
+  // คอลัมน์การติดตาม (จาก Worker) — ใช้เป็นใบงานลงพื้นที่ของ รพ.สต.
+  const followCols = p => {
+    const f = followupMap[followupKeyOf(p)];
+    if (!f) return ['ยังไม่มีบันทึก', '', '', '', ''];
+    const due = followupDue(p);
+    return [FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '', f.lastAt ? f.lastAt.slice(0, 10) : '', f.lastBy || '', f.nextDate || '', due === 'overdue' ? 'เกินนัด' : due === 'today' ? 'นัดวันนี้' : ''];
+  };
+  const data = rows.map(({ p, issues, priority, recommendations, daysOverdue }) => [p.hoscode,p.hosname,p.pid,p.cid,p.name,p.lname,p.birth,p.sex,p.chw_addr,p.tambon,p.ampur,p.first_date_serv,p.date_serv_raw,p.diagcode_raw,p.b03x_raw,p.follow_last||'NULL',p.smiv_code_count,p.total_visits,daysOverdue===null?'':daysOverdue,priority,issues.join('; '),recommendations,...followCols(p)]);
   const ws = XLSX.utils.aoa_to_sheet([cols, ...(data.length ? data : [['ไม่พบผู้ป่วยที่มีปัญหาตามเกณฑ์']])]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'ปัญหา');
