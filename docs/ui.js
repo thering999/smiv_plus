@@ -1272,9 +1272,45 @@ let ppOverdueOnly = false;
 const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'อำเภอ/ตำบล', daysOverdue: 'ค้างติดตามมา' };
 const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
 
+// ความครอบคลุมการติดตามรายอำเภอ: ในรายชื่อที่ต้องติดตาม มีกี่คนที่ได้รับการติดตามใน N วันล่าสุด / เกินนัดกี่คน
+const FOLLOWUP_COVERAGE_DAYS = 90;
+function followupCoverage(rows, map, todayYmd, days = FOLLOWUP_COVERAGE_DAYS) {
+  const since = new Date(Date.parse(`${todayYmd}T00:00:00Z`) - days * 86400000).toISOString();
+  const byAmpur = {};
+  for (const { p } of rows) {
+    const a = (byAmpur[p.ampur || '-'] ||= { total: 0, followed: 0, overdue: 0 });
+    const f = map[`${p.hoscode}-${p.pid}`];
+    const followed = !!(f && f.lastAt && f.lastAt >= since);
+    a.total++;
+    if (followed) a.followed++;
+    if (f && f.nextDate && f.lastStatus !== 'closed' && f.nextDate < todayYmd) a.overdue++;
+  }
+  return byAmpur;
+}
+
+function renderFollowupCoverage() {
+  const box = $('#followupCoverageBox');
+  if (!box) return;
+  if (!piiLoaded || !problemPatientsAll.length) { box.innerHTML = ''; return; }
+  const cov = followupCoverage(problemPatientsAll, followupMap, todayIso());
+  const entries = Object.entries(cov).sort((a, b) => b[1].total - a[1].total);
+  const sum = entries.reduce((s, [, v]) => ({ total: s.total + v.total, followed: s.followed + v.followed, overdue: s.overdue + v.overdue }), { total: 0, followed: 0, overdue: 0 });
+  const pctTxt = (n, d) => d ? `${(n * 100 / d).toFixed(1)}%` : '-';
+  box.innerHTML = `<details class="followup-coverage" open>
+    <summary><strong>ความครอบคลุมการติดตาม ${FOLLOWUP_COVERAGE_DAYS} วันล่าสุด:</strong> ${sum.followed.toLocaleString('th-TH')} / ${sum.total.toLocaleString('th-TH')} คน (${pctTxt(sum.followed, sum.total)})${sum.overdue ? ` · <span class="followup-badge overdue">เกินนัด ${sum.overdue.toLocaleString('th-TH')} คน</span>` : ''}</summary>
+    <div class="table-scroll"><table class="report-table">
+      <thead><tr><th>อำเภอ</th><th>ต้องติดตาม</th><th>ติดตามแล้ว</th><th>ร้อยละ</th><th>เกินนัด</th></tr></thead>
+      <tbody>${entries.map(([a, v]) => `<tr>
+        <td>${escapeHtml(KNOWN_AMPUR[a] || a)}</td><td>${v.total.toLocaleString('th-TH')}</td><td>${v.followed.toLocaleString('th-TH')}</td>
+        <td>${pctTxt(v.followed, v.total)}</td><td>${v.overdue ? `<span class="followup-badge overdue">${v.overdue.toLocaleString('th-TH')}</span>` : '0'}</td>
+      </tr>`).join('')}</tbody></table></div>
+  </details>`;
+}
+
 function renderProblemPatientsTable() {
   const box = $('#problemPatientsBox');
   if (!box) return;
+  renderFollowupCoverage();
   if (!problemPatientsAll.length) {
     box.innerHTML = '<p class="note">ไม่พบผู้ป่วยที่เข้าเกณฑ์ต้องติดตาม/แก้ไขข้อมูลในเงื่อนไขปัจจุบัน</p>';
     return;
