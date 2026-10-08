@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>คู่มือเจ้าหน้าที่ SMI-V Plus</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--primary:#7c3aed;--primary-dark:#5b21b6;--accent:#db2777;--text:#1e1b2e;--muted:#5b5670;--border:#e7defa;--bg:#fbf7ff;--card:#fff;--warn-bg:#fff7e6;--warn:#92400e}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Kanit,system-ui,sans-serif;color:var(--text);background:var(--bg);line-height:1.6}
+  header{background:linear-gradient(120deg,var(--primary-dark),var(--primary) 45%,var(--accent));color:#fff;padding:22px 16px}
+  .wrap{max-width:880px;margin:0 auto}
+  header h1{margin:0;font-size:1.5em}
+  header p{margin:4px 0 0;opacity:.92}
+  header a{color:#fff;text-decoration:underline}
+  main{padding:16px}
+  section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+  h2{margin:0 0 8px;font-size:1.1em;color:var(--primary-dark)}
+  ol,ul{margin:0;padding-left:22px}
+  li{margin:3px 0}
+  .warn{background:var(--warn-bg);color:var(--warn);border-color:#fcd34d}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
+  table{border-collapse:collapse;width:100%;font-size:.95em}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:#f3ebff}
+  kbd{background:#f3ebff;border:1px solid var(--border);border-radius:4px;padding:0 5px;font-family:inherit}
+  .noprint{margin-top:8px}
+  button{font-family:inherit;font-weight:600;background:#fff;color:var(--primary-dark);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+  button:focus-visible,a:focus-visible{outline:3px solid #fbbf24;outline-offset:2px}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--text:#ece8f7;--muted:#b8b0cf;--border:#3b3256;--bg:#17131f;--card:#211b2d;--warn-bg:#3a2a0a;--warn:#fcd34d} th{background:#2c2440} kbd{background:#2c2440}}
+  @media print{header{background:none;color:#000;padding:0 0 6px;border-bottom:2px solid #000} header a{color:#000} .noprint{display:none} body{background:#fff;font-size:12px} section{break-inside:avoid;border-color:#999;padding:8px 10px;margin-bottom:8px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>คู่มือเจ้าหน้าที่ — SMI-V Plus</h1>
+  <p>ติดตามผู้ป่วยจิตเวชสารเสพติดก่อความรุนแรง (SMI-V) รายคน · เว็บ: <a href="./">thering999.github.io/smiv_plus</a></p>
+  <div class="noprint"><button type="button" onclick="print()">🖨️ พิมพ์คู่มือ (1 แผ่น)</button></div>
+</div></header>
+<main class="wrap">
+
+<section class="warn">
+  <h2>⚠️ ข้อมูลส่วนบุคคล (PDPA)</h2>
+  <ul>
+    <li>ชื่อ / เลขบัตร / ที่อยู่ผู้ป่วย ใช้เพื่อติดตามดูแลเท่านั้น — <b>ห้ามถ่ายรูปหน้าจอ ส่งไลน์ หรือส่งต่อนอกหน่วยงาน</b></li>
+    <li>ระบบบันทึกทุกครั้งที่เข้าสู่ระบบและเปิดดูข้อมูล (ผู้ดูแลตรวจย้อนหลังได้)</li>
+    <li>ใช้บัญชีของตัวเองเท่านั้น · กด 🔒 ออกจากระบบ ทุกครั้งเมื่อใช้เครื่องร่วมกับผู้อื่น · ใบงานที่พิมพ์ต้องทำลายเมื่อใช้เสร็จ</li>
+  </ul>
+</section>
+
+<div class="grid">
+<section>
+  <h2>1. เข้าสู่ระบบ</h2>
+  <ol>
+    <li>เปิดเว็บ แล้วกรอก <b>ชื่อผู้ใช้ / รหัสผ่าน</b> ในการ์ด 🔐</li>
+    <li>เห็นเฉพาะผู้ป่วย<b>อำเภอที่รับผิดชอบ</b> (ภูมิลำเนาในมุกดาหาร)</li>
+    <li>เซสชันอยู่ได้ 8 ชม. · ผิด 5 ครั้ง ล็อก 15 นาที</li>
+    <li>หน้าจอไม่อัปเดต → กด <kbd>Ctrl</kbd>+<kbd>F5</kbd></li>
+  </ol>
+</section>
+<section>
+  <h2>2. ดูว่าต้องติดตามใคร</h2>
+  <ol>
+    <li>เลื่อนไปที่ <b>รายชื่อผู้ป่วยที่ต้องติดตาม</b></li>
+    <li>🔴 สูง = ก่อความรุนแรงซ้ำ (ติดตามก่อน) · 🟠 กลาง · ⚪ ปกติ</li>
+    <li>ป้าย <b>⏰ เกินนัด</b> บนแถบด้านบน → กดเพื่อดูเฉพาะคนที่เลยวันนัด</li>
+    <li>ค้นหาด้วยชื่อ / หน่วยบริการ / ตำบล ได้</li>
+  </ol>
+</section>
+<section>
+  <h2>3. บันทึกการติดตาม (ทุกครั้ง)</h2>
+  <ol>
+    <li>กด <b>📝 บันทึก</b> ในแถวของผู้ป่วย</li>
+    <li>เลือก <b>สถานะ</b> เช่น เยี่ยมบ้านแล้ว / โทร / ไม่พบตัว / ส่งต่อ / ปิดเคส</li>
+    <li>ใส่ <b>วันนัดครั้งถัดไป</b> — ระบบจะเตือนเมื่อเลยวันนัด</li>
+    <li>บันทึกสั้นๆ (ไม่เกิน 500 ตัวอักษร) แล้วกด <b>บันทึก</b></li>
+  </ol>
+</section>
+<section>
+  <h2>4. ก่อนลงพื้นที่</h2>
+  <ul>
+    <li><b>🖨️ พิมพ์ใบงานติดตาม</b> — 1 หน้าต่อหน่วยบริการ มีช่องเขียนผล</li>
+    <li><b>📋 ส่งออกรายชื่อปัญหา</b> — Excel พร้อมสถานะติดตามล่าสุด</li>
+    <li>กลับมาแล้ว <b>บันทึกผลในระบบ</b> ให้ครบ</li>
+  </ul>
+</section>
+</div>
+
+<section>
+  <h2>สถานะการติดตาม — เลือกอันไหน</h2>
+  <table>
+    <tr><th>สถานะ</th><th>ใช้เมื่อ</th></tr>
+    <tr><td>เยี่ยมบ้านแล้ว</td><td>พบตัวผู้ป่วย/ญาติที่บ้าน</td></tr>
+    <tr><td>ติดตามทางโทรศัพท์</td><td>คุยกับผู้ป่วย/ญาติได้ทางโทรศัพท์</td></tr>
+    <tr><td>ไม่พบตัว</td><td>ไปแล้วไม่พบ / ติดต่อไม่ได้ — ใส่วันนัดลองใหม่</td></tr>
+    <tr><td>ปฏิเสธการรักษา</td><td>ผู้ป่วยไม่ยอมรับการรักษา — แจ้งทีมสุขภาพจิตอำเภอ</td></tr>
+    <tr><td>ส่งต่อ</td><td>ส่งต่อโรงพยาบาล/หน่วยงานอื่น</td></tr>
+    <tr><td>อาการคงที่</td><td>รับยาต่อเนื่อง ไม่มีพฤติกรรมรุนแรง</td></tr>
+    <tr><td>ปิดเคส</td><td>ย้ายออก / เสียชีวิต / ไม่ต้องติดตามแล้ว (ไม่ขึ้นเตือนเกินนัดอีก)</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>ผู้ดูแลระบบ (admin) เท่านั้น</h2>
+  <ul>
+    <li><b>นำเข้าข้อมูลใหม่</b>: เลือกไฟล์ Excel จาก HDC (ชีต <code>Data</code>) → กด 🚀 เผยแพร่ข้อมูล — ระบบเตือนเลขบัตรไม่ครบ 13 หลักเป็นปกติของไฟล์ HDC กดยืนยันได้</li>
+    <li><b>ผู้ป่วยนอกจังหวัด</b>: กดการ์ด "นอกจังหวัด" → 🗺️ ส่งออก Excel แยกชีตตามจังหวัด เพื่อประสานส่งต่อ</li>
+    <li><b>ตรวจการเข้าถึงข้อมูล</b>: 📜 ประวัติการนำเข้า → บันทึกการเข้าถึงข้อมูล (PDPA)</li>
+    <li><b>ผลงานรายเดือน</b>: ในแผงความครอบคลุมการติดตาม → 📈 ผลงานการติดตามรายเดือน</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ติดปัญหา</h2>
+  <ul>
+    <li>เข้าสู่ระบบไม่ได้ / ลืมรหัส / ย้ายอำเภอ → ติดต่อผู้ดูแลระบบ (สร้างบัญชีให้ใหม่ได้ทันที)</li>
+    <li>ไม่เห็นรายชื่อ ขึ้นว่า "ยังไม่มีข้อมูลผู้ป่วยตัวจริง" → รอผู้ดูแลเผยแพร่ข้อมูลรอบใหม่</li>
+    <li>ข้อมูลผู้ป่วยผิด (ชื่อ/ที่อยู่/วันรับบริการ) → แก้ที่ระบบ HIS ของโรงพยาบาล รอบถัดไปจะถูกต้องเอง</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>
