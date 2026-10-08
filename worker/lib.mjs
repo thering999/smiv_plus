@@ -864,7 +864,7 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
     return json(request, env, { ok: true, items }, 200, { 'Cache-Control': 'no-store' });
   }
 
-  async function handleFullHistory(request, env, payload) {
+  async function handleFullHistory(request, env, payload, user = {}) {
     const storage = storageFor(env);
     if (!storage) return json(request, env, { error: STORAGE_MISSING_MESSAGE }, 503);
 
@@ -885,7 +885,7 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
         publicPayload, env.GH_TOKEN,
         `restore data.json from ${file} (${restored.patients.length} คน, ปิดบังข้อมูลส่วนบุคคลแล้ว)`
       );
-      await writeAudit(storage, { action: 'restore', ok: true, status: 200, count: publicPayload.patients.length, detail: file, ip: clientIp(request) }, nowMs());
+      await writeAudit(storage, { action: 'restore', username: user.username, role: user.role, ok: true, status: 200, count: publicPayload.patients.length, detail: file, ip: clientIp(request) }, nowMs());
       return json(request, env, { ok: true, restoredFrom: file, patientCount: publicPayload.patients.length, publicHistoryFile: entry.file });
     }
 
@@ -962,7 +962,7 @@ export function createWorkerHandler({ fetchImpl, nowMs = () => Date.now() } = {}
           const auth = await requireUser(request, env, ['admin']);
           if (!auth.ok) return json(request, env, { error: auth.error }, auth.status);
           try {
-            return await handleFullHistory(request, env, body || {});
+            return await handleFullHistory(request, env, body || {}, auth.user);
           } catch (err) {
             return json(request, env, { error: err.message || String(err) }, 502);
           }
