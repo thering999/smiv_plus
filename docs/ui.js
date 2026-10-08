@@ -751,7 +751,7 @@ function renderCharts(report, totals, level, hasPop) {
   drawChart('chartPatients', {
     type: 'bar',
     data: { labels, datasets: [
-      { label: 'เก่า (B)', data: report.map(r => r.b), backgroundColor: '#2c6e91' },
+      { label: 'เก่า (B)', data: report.map(r => r.b), backgroundColor: '#7c3aed' },
       { label: 'ใหม่ (C)', data: report.map(r => r.c), backgroundColor: '#5aa7c9' },
     ] },
     options: { responsive: true, indexAxis: 'y', scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } } },
@@ -796,7 +796,7 @@ function renderCharts(report, totals, level, hasPop) {
   }
   drawChart('chartSex', {
     type: 'pie',
-    data: { labels: Object.keys(sexCount), datasets: [{ data: Object.values(sexCount), backgroundColor: ['#2c6e91', '#e07b9e', '#9aa5ad'] }] },
+    data: { labels: Object.keys(sexCount), datasets: [{ data: Object.values(sexCount), backgroundColor: ['#7c3aed', '#e07b9e', '#9aa5ad'] }] },
     options: { responsive: true, aspectRatio: 1.8 },
   });
 
@@ -808,19 +808,19 @@ function renderCharts(report, totals, level, hasPop) {
   const months = Object.keys(monthCount).sort();
   drawChart('chartMonthlyTrend', {
     type: 'line',
-    data: { labels: months, datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: months.map(m => monthCount[m]), borderColor: '#2c6e91', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 }] },
+    data: { labels: months, datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: months.map(m => monthCount[m]), borderColor: '#7c3aed', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 }] },
     options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
 
   const yearly = buildYearlyTrend();
   drawChart('chartYearlyTrend', {
     type: 'bar',
-    data: { labels: yearly.years.map(y => 'ปีงบ ' + y), datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: yearly.newPatients, backgroundColor: '#2c6e91' }] },
+    data: { labels: yearly.years.map(y => 'ปีงบ ' + y), datasets: [{ label: 'ผู้ป่วยใหม่ (คน)', data: yearly.newPatients, backgroundColor: '#7c3aed' }] },
     options: { responsive: true, scales: { y: { beginAtZero: true } } },
   });
 
   const byAmpur = buildYearlyTrendByAmpur();
-  const ampurColors = ['#2c6e91', '#c0392b', '#1e7e34', '#e0a63c', '#8e44ad', '#16a085', '#d35400', '#7f8c8d'];
+  const ampurColors = ['#7c3aed', '#db2777', '#0f9f8f', '#f59e0b', '#0284c7', '#16a34a', '#ea580c', '#64748b'];
   drawChart('chartYearlyTrendByAmpur', {
     type: 'line',
     data: {
@@ -844,7 +844,7 @@ function renderCharts(report, totals, level, hasPop) {
       data: {
         labels: accessTrend.years.map(y => 'ปีงบ ' + y),
         datasets: [
-          { label: 'อัตราเข้าถึงบริการ E (%)', data: accessTrend.ePct, borderColor: '#2c6e91', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 },
+          { label: 'อัตราเข้าถึงบริการ E (%)', data: accessTrend.ePct, borderColor: '#7c3aed', backgroundColor: 'rgba(44,110,145,.15)', fill: true, tension: 0.2 },
           { label: 'เป้าหมาย 40%', data: accessTrend.years.map(() => 40), borderColor: '#c0392b', borderDash: [6, 4], pointRadius: 0, fill: false },
         ],
       },
