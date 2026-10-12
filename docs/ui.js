@@ -2205,6 +2205,7 @@ async function publishToGithub() {
 // ---------- ดูประวัติการนำเข้าย้อนหลัง (อ่านอย่างเดียว ไม่ต้อง token) ----------
 let viewingHistory = false;
 
+let historyGroup = '';
 async function loadHistoryList() {
   const box = document.getElementById('historyList');
   box.innerHTML = '<p class="note">กำลังโหลด...</p>';
@@ -2214,9 +2215,23 @@ async function loadHistoryList() {
     const list = await res.json();
     if (!list.length) { box.innerHTML = '<p class="note">ยังไม่มีประวัติการเผยแพร่</p>'; return; }
     const isAdmin = isAdminUser();
-    const rows = list.slice().reverse().map(item => `
+    // ดูย้อนหลังแยกรายวัน/รายเดือน/ปีงบ: แสดงชุดล่าสุดของแต่ละช่วง พร้อมจำนวนครั้งที่นำเข้าในช่วงนั้น
+    const groupKey = item => {
+      const d = new Date(item.publishedAt);
+      if (historyGroup === 'day') return d.toLocaleDateString('th-TH', { dateStyle: 'medium' });
+      if (historyGroup === 'month') return d.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+      if (historyGroup === 'fy') return `ปีงบ ${item.fiscalYear || '-'}`;
+      return null;
+    };
+    const groups = new Map();
+    for (const item of list.slice().reverse()) {
+      const k = groupKey(item) ?? item.file;
+      if (groups.has(k)) groups.get(k).count++;
+      else groups.set(k, { item, count: 1, label: groupKey(item) });
+    }
+    const rows = [...groups.values()].map(({ item, count, label }) => `
       <tr>
-        <td>${new Date(item.publishedAt).toLocaleString('th-TH')}</td>
+        <td>${label ? `<b>${escapeHtml(label)}</b><div class="note" style="margin:2px 0 0">ล่าสุด ${new Date(item.publishedAt).toLocaleString('th-TH')} · นำเข้า ${count} ครั้ง</div>` : new Date(item.publishedAt).toLocaleString('th-TH')}</td>
         <td>${item.fiscalYear || '-'}</td>
         <td>${item.patientCount.toLocaleString('th-TH')}</td>
         <td>
@@ -2225,9 +2240,12 @@ async function loadHistoryList() {
           <button class="btn btn-outline" data-delete-file="${escapeHtml(item.file)}" style="border-color:var(--danger);color:var(--danger)">🗑️ ลบรายการนี้</button>` : ''}
         </td>
       </tr>`).join('');
-    box.innerHTML = `<div class="table-scroll"><table class="report-table">
-      <thead><tr><th>เผยแพร่เมื่อ</th><th>ปีงบ</th><th>จำนวนผู้ป่วย</th><th></th></tr></thead>
+    box.innerHTML = `<div style="margin-bottom:8px"><label for="historyGroup" style="font-weight:600">ดูแบบ </label>
+      <select id="historyGroup">${[['', 'ทุกครั้ง'], ['day', 'รายวัน'], ['month', 'รายเดือน'], ['fy', 'ปีงบประมาณ']].map(([v, l]) => `<option value="${v}"${v === historyGroup ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="table-scroll"><table class="report-table">
+      <thead><tr><th>${historyGroup ? 'ช่วงเวลา' : 'เผยแพร่เมื่อ'}</th><th>ปีงบ</th><th>จำนวนผู้ป่วย</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
+    box.querySelector('#historyGroup').addEventListener('change', e => { historyGroup = e.target.value; loadHistoryList(); });
     box.querySelectorAll('[data-history-file]').forEach(btn => {
       btn.addEventListener('click', () => loadHistorySnapshot(btn.getAttribute('data-history-file')));
     });
