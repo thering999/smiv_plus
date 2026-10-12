@@ -1205,6 +1205,7 @@ const ISSUE_ACTION_FOR = {
   'ไม่มีวันเกิด': 'ตรวจสอบและเพิ่มวันเดือนปีเกิดในระบบ HIS ต้นทาง',
   'ไม่มีตำบล': 'ตรวจสอบและเพิ่มรหัสตำบลที่อยู่ในระบบ HIS ต้นทาง',
   'ค้างติดตามนาน (>90 วัน)': 'ให้ลำดับความสำคัญก่อน — ติดตามเยี่ยมบ้าน/โทรศัพท์ด่วนที่สุด',
+  'ค้างติดตามเกิน 1 ปี': 'ตรวจสอบว่ายังอยู่ในพื้นที่/ยังมีชีวิต — ถ้าย้ายออกให้ประสานส่งต่อ ถ้ายังอยู่ให้เยี่ยมบ้านทันที',
 };
 
 function daysSince(dateStr) {
@@ -1238,6 +1239,7 @@ function buildProblemPatients(fy, level, areaFilter, scope = currentScope()) {
     if (!p.birth) issues.push('ไม่มีวันเกิด');
     if (!p.tambon) issues.push('ไม่มีตำบล');
     if (daysOverdue !== null && daysOverdue > 90) issues.push('ค้างติดตามนาน (>90 วัน)');
+    if (daysOverdue !== null && daysOverdue > 365) issues.push('ค้างติดตามเกิน 1 ปี');
     if (!issues.length) continue;
 
     const priority = p.has_repeat_violence ? 'สูง' : ((issues.length >= 2 || (daysOverdue !== null && daysOverdue > 90)) ? 'กลาง' : 'ปกติ');
@@ -1290,6 +1292,41 @@ let ppSortKey = 'daysOverdue';
 let ppSortDir = 'desc';
 let ppVisibleCount = 20;
 let ppOverdueOnly = false;
+let ppAmpurFilter = '';   // รหัสอำเภอ หรือ 'out' = นอกจังหวัด
+let ppHosFilter = '';
+let ppIssueFilter = '';
+let ppFollowFilter = '';  // 'none' = ยังไม่มีบันทึก, 'done' = บันทึกแล้ว
+
+// ใช้ร่วมกันระหว่างตารางกับปุ่มส่งออก Excel เฉพาะที่กรอง
+function ppFilteredRows() {
+  let rows = problemPatientsAll;
+  if (ppPriorityFilter) rows = rows.filter(r => r.priority === ppPriorityFilter);
+  if (ppOverdueOnly) rows = rows.filter(({ p }) => followupDue(p) === 'overdue');
+  if (ppAmpurFilter === 'out') rows = rows.filter(({ p }) => p.chw_addr && p.chw_addr !== '49');
+  else if (ppAmpurFilter) rows = rows.filter(({ p }) => p.chw_addr === '49' && p.ampur === ppAmpurFilter);
+  if (ppHosFilter) rows = rows.filter(({ p }) => p.hoscode === ppHosFilter);
+  if (ppIssueFilter) rows = rows.filter(r => r.issues.includes(ppIssueFilter));
+  if (ppFollowFilter) rows = rows.filter(({ p }) => !!followupMap[followupKeyOf(p)] === (ppFollowFilter === 'done'));
+  if (ppSearchTerm.trim()) {
+    const term = ppSearchTerm.trim().toLowerCase();
+    rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon, addressLabel(p)].some(v => (v || '').toLowerCase().includes(term)));
+  }
+  return rows;
+}
+
+function exportFilteredXlsx() {
+  const rows = ppFilteredRows();
+  const cols = ['ความสำคัญ', 'ชื่อ', 'สกุล', 'cid', 'pid', 'หน่วยบริการ', 'ที่อยู่', 'ค้างติดตาม(วัน)', 'ปัญหาที่พบ', 'คำแนะนำ', 'สถานะติดตามล่าสุด', 'วันที่ติดตามล่าสุด', 'วันนัดถัดไป', 'ผลการติดตามครั้งนี้'];
+  const data = rows.map(({ p, issues, priority, recommendations, daysOverdue }) => {
+    const f = followupMap[followupKeyOf(p)];
+    return [priority, p.name, p.lname, p.cid, p.pid, p.hosname, addressLabel(p), daysOverdue ?? '', issues.join('; '), recommendations,
+      f ? (FOLLOWUP_STATUS_LABELS[f.lastStatus] || f.lastStatus || '') : 'ยังไม่มีบันทึก', f && f.lastAt ? f.lastAt.slice(0, 10) : '', (f && f.nextDate) || '', ''];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([cols, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'รายชื่อติดตาม');
+  XLSX.writeFile(wb, `smiv_followup_list_${todayIso()}.xlsx`);
+}
 
 const PP_SORT_LABEL = { priority: 'ความสำคัญ', name: 'ชื่อ-สกุล', hosname: 'หน่วยบริการ', ampur: 'ที่อยู่ (ต./อ./จ.)', daysOverdue: 'ค้างติดตามมา' };
 const PP_PRIORITY_ORDER = { 'สูง': 0, 'กลาง': 1, 'ปกติ': 2 };
@@ -1409,14 +1446,7 @@ function renderProblemPatientsTable() {
     return;
   }
 
-  let rows = problemPatientsAll;
-  if (ppPriorityFilter) rows = rows.filter(r => r.priority === ppPriorityFilter);
-  if (ppOverdueOnly) rows = rows.filter(({ p }) => followupDue(p) === 'overdue');
-  if (ppSearchTerm.trim()) {
-    const term = ppSearchTerm.trim().toLowerCase();
-    rows = rows.filter(({ p }) => [p.name, p.lname, p.hosname, p.hoscode, p.ampur, p.tambon, addressLabel(p)].some(v => (v || '').toLowerCase().includes(term)));
-  }
-  rows = rows.slice().sort((a, b) => {
+  let rows = ppFilteredRows().slice().sort((a, b) => {
     let av, bv;
     if (ppSortKey === 'priority') { av = PP_PRIORITY_ORDER[a.priority]; bv = PP_PRIORITY_ORDER[b.priority]; }
     else if (ppSortKey === 'name') { av = (a.p.name || '') + (a.p.lname || ''); bv = (b.p.name || '') + (b.p.lname || ''); }
@@ -1430,22 +1460,31 @@ function renderProblemPatientsTable() {
   });
 
   const filteredCount = rows.length;
+  const recorded = rows.filter(({ p }) => followupMap[followupKeyOf(p)]).length;
+  const uniq = (arr) => [...new Map(arr).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'th'));
+  const ampurOpts = uniq(problemPatientsAll.map(({ p }) => p.chw_addr && p.chw_addr !== '49' ? ['out', 'นอกจังหวัด'] : [p.ampur, KNOWN_AMPUR[p.ampur] || p.ampur]).filter(([k]) => k));
+  const hosOpts = uniq(problemPatientsAll.map(({ p }) => [p.hoscode, p.hosname || p.hoscode]).filter(([k]) => k));
+  const issueOpts = Object.keys(ISSUE_ACTION_FOR).filter(i => problemPatientsAll.some(r => r.issues.includes(i))).map(i => [i, i]);
+  const ppSelect = (id, label, value, opts) => `<div><label for="${id}" style="font-size:.85em;font-weight:600;display:block;margin-bottom:4px">${label}</label>
+    <select id="${id}" style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;max-width:220px">
+      <option value="">— ทั้งหมด —</option>${opts.map(([k, l]) => `<option value="${escapeHtml(k)}" ${k === value ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}
+    </select></div>`;
   const shown = rows.slice(0, ppVisibleCount);
   const arrow = key => key !== ppSortKey ? '' : (ppSortDir === 'asc' ? ' ▲' : ' ▼');
   const th = (key, label) => `<th data-sort-key="${key}" role="button" tabindex="0" aria-sort="${key === ppSortKey ? (ppSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}" style="cursor:pointer;user-select:none" title="คลิกเพื่อจัดเรียง">${label}${arrow(key)}</th>`;
 
   const rowsHtml = shown.map(({ p, issues, priority, daysOverdue }) => `
     <tr>
-      <td>${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
-      <td>${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
-      ${piiLoaded ? `<td>${p.cid ? `<span title="เลขบัตรประชาชน (ใช้ติดตาม)">${escapeHtml(p.cid)}</span>
+      <td data-label="ความสำคัญ">${priority === 'สูง' ? '🔴' : priority === 'กลาง' ? '🟠' : '⚪'} ${priority}</td>
+      <td data-label="ชื่อ-สกุล">${escapeHtml(p.name || '')} ${escapeHtml(p.lname || '')}</td>
+      ${piiLoaded ? `<td data-label="เลขบัตร">${p.cid ? `<span title="เลขบัตรประชาชน (ใช้ติดตาม)">${escapeHtml(p.cid)}</span>
         <button type="button" class="btn btn-outline" data-copy-cid="${escapeHtml(p.cid)}" style="padding:2px 8px;font-size:.8em;margin-left:4px" title="คัดลอกเลขบัตรประชาชน">⧉</button>` : '<span class="note">ไม่มีในข้อมูล</span>'}
         <div class="note" style="margin:2px 0 0">pid: ${escapeHtml(p.pid || '-')}</div></td>` : '<td class="note">🔒 ปิดบัง</td>'}
-      <td>${escapeHtml(p.hosname || p.hoscode || '')}</td>
-      <td>${escapeHtml(addressLabel(p))}</td>
-      <td>${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
-      <td>${issues.join(', ')}</td>
-      ${piiLoaded ? `<td>${followupCellHtml(p)}</td>` : ''}
+      <td data-label="หน่วยบริการ">${escapeHtml(p.hosname || p.hoscode || '')}</td>
+      <td data-label="ที่อยู่">${escapeHtml(addressLabel(p))}</td>
+      <td data-label="ค้างติดตาม">${daysOverdue === null ? '-' : daysOverdue.toLocaleString('th-TH') + ' วัน'}</td>
+      <td data-label="ปัญหา">${escapeHtml(issues.join(', '))}</td>
+      ${piiLoaded ? `<td data-label="การติดตาม">${followupCellHtml(p)}</td>` : ''}
     </tr>`).join('');
 
   box.innerHTML = `
@@ -1460,15 +1499,25 @@ function renderProblemPatientsTable() {
           <option value="ปกติ" ${ppPriorityFilter === 'ปกติ' ? 'selected' : ''}>⚪ ปกติ</option>
         </select></div>
       ${piiLoaded ? `<label style="margin-bottom:9px"><input type="checkbox" id="ppOverdueOnly" ${ppOverdueOnly ? 'checked' : ''}> เฉพาะเกินวันนัด</label>` : ''}
-      <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน</div>
+      ${ppSelect('ppAmpurFilter', 'อำเภอ', ppAmpurFilter, ampurOpts)}
+      ${ppSelect('ppHosFilter', 'หน่วยบริการ', ppHosFilter, hosOpts)}
+      ${ppSelect('ppIssueFilter', 'ปัญหาที่พบ', ppIssueFilter, issueOpts)}
+      ${ppSelect('ppFollowFilter', 'การบันทึก', ppFollowFilter, [['none', 'ยังไม่มีบันทึก'], ['done', 'บันทึกแล้ว']])}
+      <button type="button" class="btn btn-outline" id="ppExportBtn" style="margin-bottom:2px">📥 ส่งออก Excel (เฉพาะที่กรอง)</button>
+      <div class="note" style="margin-bottom:9px">พบ ${filteredCount.toLocaleString('th-TH')} จาก ${problemPatientsAll.length.toLocaleString('th-TH')} คน · บันทึกแล้ว ${recorded.toLocaleString('th-TH')} · ยังไม่บันทึก ${(filteredCount - recorded).toLocaleString('th-TH')}</div>
     </div>
-    <div class="table-scroll"><table class="report-table">
+    <div class="table-scroll"><table class="report-table pp-table">
     <thead><tr>${th('priority', 'ความสำคัญ')}${th('name', 'ชื่อ-สกุล')}${piiLoaded ? th('cid', 'เลขบัตรประชาชน') : '<th>เลขบัตรประชาชน</th>'}${th('hosname', 'หน่วยบริการ')}${th('ampur', 'ที่อยู่ (ต./อ./จ.)')}${th('daysOverdue', 'ค้างติดตามมา')}<th>ปัญหาที่พบ</th>${piiLoaded ? '<th>การติดตาม</th>' : ''}</tr></thead>
     <tbody>${rowsHtml}</tbody></table></div>
     ${filteredCount > ppVisibleCount ? `<button class="btn btn-outline" id="ppShowMoreBtn" style="margin-top:10px">แสดงเพิ่ม (${Math.min(50, filteredCount - ppVisibleCount)} จาก ${filteredCount - ppVisibleCount} ที่เหลือ)</button>` : ''}`;
 
   $('#ppSearchInput').addEventListener('input', e => { ppSearchTerm = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
   $('#ppPriorityFilter').addEventListener('change', e => { ppPriorityFilter = e.target.value; ppVisibleCount = 20; renderProblemPatientsTable(); });
+  const filterVars = { ppAmpurFilter: v => { ppAmpurFilter = v; }, ppHosFilter: v => { ppHosFilter = v; }, ppIssueFilter: v => { ppIssueFilter = v; }, ppFollowFilter: v => { ppFollowFilter = v; } };
+  for (const [id, set] of Object.entries(filterVars)) {
+    $(`#${id}`).addEventListener('change', e => { set(e.target.value); ppVisibleCount = 20; renderProblemPatientsTable(); });
+  }
+  $('#ppExportBtn').addEventListener('click', exportFilteredXlsx);
   const overdueBox = $('#ppOverdueOnly');
   if (overdueBox) overdueBox.addEventListener('change', e => { ppOverdueOnly = e.target.checked; ppVisibleCount = 20; renderProblemPatientsTable(); });
   $$('#problemPatientsBox [data-followup]').forEach(btn => {

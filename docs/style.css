@@ -206,3 +206,11 @@ table.report-table th[data-sort-key]:focus-visible{outline:3px solid #fbbf24;out
 }
 .nav-btn.nav-due{background:#fff4d6;color:#92400e;border-color:#fbbf24;font-weight:700}
 .nav-btn.nav-due:hover{background:#ffe8a3}
+/* รายชื่อติดตาม: มือถือแสดงเป็นการ์ดแทนตาราง */
+@media (max-width: 640px){
+  .pp-table thead{display:none}
+  .pp-table,.pp-table tbody,.pp-table tr,.pp-table td{display:block;width:100%}
+  .pp-table tr{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:6px 10px}
+  .pp-table td{border:0;padding:4px 0;text-align:left}
+  .pp-table td[data-label]::before{content:attr(data-label) ": ";font-weight:600;color:var(--muted,#666)}
+}
