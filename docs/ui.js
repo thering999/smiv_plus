@@ -2539,7 +2539,19 @@ async function init() {
   $('#scopeSelect').addEventListener('change', render);
   $('#dateFrom').addEventListener('change', render);
   $('#dateTo').addEventListener('change', render);
-  $('#clearDates').addEventListener('click', () => { $('#dateFrom').value = ''; $('#dateTo').value = ''; render(); });
+  // ช่วงเดือน: เติมช่องวันที่ให้อัตโนมัติ (วันแรกของเดือนเริ่ม ถึงวันสุดท้ายของเดือนสิ้นสุด)
+  const applyMonthRange = () => {
+    const from = $('#monthFrom').value, to = $('#monthTo').value || from;
+    if (from) $('#dateFrom').value = `${from}-01`;
+    if (to) {
+      const [y, m] = to.split('-').map(Number);
+      $('#dateTo').value = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    }
+    render();
+  };
+  $('#monthFrom').addEventListener('change', applyMonthRange);
+  $('#monthTo').addEventListener('change', applyMonthRange);
+  $('#clearDates').addEventListener('click', () => { $('#dateFrom').value = ''; $('#dateTo').value = ''; $('#monthFrom').value = ''; $('#monthTo').value = ''; render(); });
   $('#exportReportBtn').addEventListener('click', () => exportReportXlsx());
   $('#exportReportAmpurBtn').addEventListener('click', () => exportReportXlsx('ampur'));
   $('#exportReportHoscodeBtn').addEventListener('click', () => exportReportXlsx('hoscode'));
